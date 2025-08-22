@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use crate::types::{DependencyTree, ParseOptions, Dependency, ProgressEvent};
 use crate::parser::{JavaScriptParser, VueParser, ModuleResolver};
+use crate::cache::{FileCache, CacheStats};
 
 fn normalize_path(path: &str) -> String {
     path.replace("/./", "/")
@@ -15,6 +16,7 @@ pub struct TreeBuilder {
     js_parser: JavaScriptParser,
     vue_parser: VueParser,
     resolver: ModuleResolver,
+    cache: FileCache,
 }
 
 impl TreeBuilder {
@@ -23,14 +25,18 @@ impl TreeBuilder {
             js_parser: JavaScriptParser::new()?,
             vue_parser: VueParser::new()?,
             resolver: ModuleResolver::new(),
+            cache: FileCache::new(true), // Enable cache by default
         })
     }
     
     pub async fn build_dependency_tree(
-        &self,
+        &mut self,
         entries: &[String],
         options: &ParseOptions,
     ) -> Result<(DependencyTree, usize)> {
+        // Configure cache based on options
+        self.cache.set_enabled(options.cache_enabled);
+        
         let mut tree = DependencyTree::new();
         
         // Get number of available threads
@@ -75,8 +81,13 @@ impl TreeBuilder {
         Ok((tree, num_threads))
     }
     
+    /// Get cache statistics
+    pub fn get_cache_stats(&self) -> CacheStats {
+        self.cache.get_stats()
+    }
+    
     async fn parse_entry_file(
-        &self,
+        &mut self,
         file_path: &str,
         options: &ParseOptions,
         tree: &mut DependencyTree,
@@ -106,15 +117,26 @@ impl TreeBuilder {
             callback(ProgressEvent::Start, file_path);
         }
         
-        // Read file content
-        let content = fs::read_to_string(file_path).await
-            .with_context(|| format!("Failed to read file: {}", file_path))?;
-        
-        // Parse dependencies
-        let dependencies = if is_vue {
-            self.vue_parser.parse_file(file_path, &content)?
+        // Try to get cached dependencies first
+        let dependencies = if self.cache.is_cached(file_path).await? {
+            // Use cached dependencies
+            self.cache.get_cached_dependencies(file_path).unwrap()
         } else {
-            self.js_parser.parse_file(file_path, &content)?
+            // Read file content and parse
+            let content = fs::read_to_string(file_path).await
+                .with_context(|| format!("Failed to read file: {}", file_path))?;
+            
+            // Parse dependencies
+            let deps = if is_vue {
+                self.vue_parser.parse_file(file_path, &content)?
+            } else {
+                self.js_parser.parse_file(file_path, &content)?
+            };
+            
+            // Cache the dependencies for future use
+            self.cache.cache_dependencies(file_path, deps.clone()).await?;
+            
+            deps
         };
         
         // Add to tree
@@ -143,7 +165,7 @@ impl TreeBuilder {
     }
     
     fn parse_file_recursive<'a>(
-        &'a self,
+        &'a mut self,
         context: &'a Path,
         request: &'a str,
         options: &'a ParseOptions,
@@ -191,15 +213,26 @@ impl TreeBuilder {
                 callback(ProgressEvent::Start, &resolved_id);
             }
             
-            // Read file content
-            let content = fs::read_to_string(&resolved_id).await
-                .with_context(|| format!("Failed to read file: {}", resolved_id))?;
-            
-            // Parse dependencies
-            let dependencies = if is_vue {
-                self.vue_parser.parse_file(&resolved_id, &content)?
+            // Try to get cached dependencies first
+            let dependencies = if self.cache.is_cached(&resolved_id).await? {
+                // Use cached dependencies
+                self.cache.get_cached_dependencies(&resolved_id).unwrap()
             } else {
-                self.js_parser.parse_file(&resolved_id, &content)?
+                // Read file content and parse
+                let content = fs::read_to_string(&resolved_id).await
+                    .with_context(|| format!("Failed to read file: {}", resolved_id))?;
+                
+                // Parse dependencies
+                let deps = if is_vue {
+                    self.vue_parser.parse_file(&resolved_id, &content)?
+                } else {
+                    self.js_parser.parse_file(&resolved_id, &content)?
+                };
+                
+                // Cache the dependencies for future use
+                self.cache.cache_dependencies(&resolved_id, deps.clone()).await?;
+                
+                deps
             };
             
             // Add to tree

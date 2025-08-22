@@ -1,4 +1,5 @@
 mod analyzer;
+mod cache;
 mod config;
 mod output;
 mod parser;
@@ -16,6 +17,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::analyzer::DependencyAnalyzer;
+use crate::cache::CacheStats;
 use crate::types::{ParseOptions, SkipDynamicImports};
 use crate::output::{ConsoleOutput, JsonOutput};
 
@@ -185,6 +187,14 @@ pub struct Cli {
     #[arg(short = 'W', long, action = clap::ArgAction::SetTrue, 
           help = "Watch mode: monitor files for changes and re-run analysis")]
     watch: bool,
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, 
+          help = "Enable file caching to speed up repeated analysis")]
+    cache: bool,
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, 
+          help = "Disable file caching (override default)")]
+    no_cache: bool,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -272,6 +282,31 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
     let mut last_change = Instant::now();
     let mut analysis_task: Option<tokio::task::JoinHandle<()>> = None;
     
+    // Create persistent analyzer for watch mode to maintain cache between analyses
+    let mut watch_options = ParseOptions::default();
+    if let Some(context) = &cli.context {
+        watch_options.context = context.clone();
+    }
+    watch_options.extensions = cli.extensions.split(',').map(|s| s.to_string()).collect();
+    watch_options.js_extensions = cli.js.split(',').map(|s| s.to_string()).collect();
+    watch_options.include = regex::Regex::new(&cli.include)?;
+    watch_options.exclude = regex::Regex::new(&cli.exclude)?;
+    watch_options.dependency_exclude = regex::Regex::new(r"node_modules|\.git|\.svn|\.hg")?;
+    watch_options.tsconfig = cli.tsconfig.clone();
+    watch_options.transform = cli.transform;
+    watch_options.take = cli.take;
+    watch_options.skip_dynamic_imports = match cli.skip_dynamic_imports {
+        Some(SkipDynamicImportsArg::Tree) => SkipDynamicImports::Tree,
+        Some(SkipDynamicImportsArg::Circular) => SkipDynamicImports::Circular,
+        None => SkipDynamicImports::Never,
+    };
+    // Enable caching for watch mode
+    watch_options.cache_enabled = !cli.no_cache;
+    // Disable progress callback for watch mode
+    watch_options.progress_callback = None;
+    
+    let mut persistent_analyzer = Arc::new(tokio::sync::Mutex::new(DependencyAnalyzer::new(watch_options)?));
+    
     // Handle file system events
     const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
     
@@ -316,13 +351,44 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                     }
                     
                     // Spawn cancellable analysis task
-                    let cli_clone = cli.clone();
+                    let analyzer_clone = persistent_analyzer.clone();
+                    let files_to_analyze_clone = files_to_analyze.clone();
+                    let show_progress = false; // Disable progress bar in watch mode
+                    let is_watch_mode = true;
+                    
                     analysis_task = Some(tokio::spawn(async move {
-                        let mut cli_with_files = cli_clone;
-                        cli_with_files.files = files_to_analyze;
+                        let start_time = Instant::now();
+                        let file_count = files_to_analyze_clone.len();
                         
-                        match run_analysis_once(&cli_with_files).await {
-                            Ok(_) => {
+                        // Use the persistent analyzer
+                        let mut analyzer = analyzer_clone.lock().await;
+                        match analyzer.analyze_files(&files_to_analyze_clone).await {
+                            Ok((result, num_threads)) => {
+                                let elapsed = start_time.elapsed();
+                                let cache_stats = analyzer.get_cache_stats();
+                                
+                                // Compact output for watch mode with cache info
+                                let cache_info = if cache_stats.hits > 0 {
+                                    format!(", {}💾", cache_stats.hits)
+                                } else {
+                                    String::new()
+                                };
+                                
+                                println!("  {} {} files, {} deps ({:.2}s, {} threads{})", 
+                                    style("📊").bright(),
+                                    style(file_count).yellow(),
+                                    style(result.tree.len()).yellow(),
+                                    elapsed.as_secs_f64(),
+                                    style(num_threads).cyan(),
+                                    cache_info
+                                );
+                                
+                                // Show results based on CLI flags
+                                if result.circulars.len() > 0 {
+                                    let console_output = ConsoleOutput::new();
+                                    console_output.print_circular(&result.circulars, None);
+                                }
+                                
                                 println!("{} Incremental analysis complete\n", 
                                     style("✅").bright()
                                 );
@@ -464,6 +530,16 @@ async fn run_analysis_once(cli: &Cli) -> Result<()> {
         None => SkipDynamicImports::Never,
     };
     
+    // Configure caching based on CLI flags
+    options.cache_enabled = if cli.no_cache {
+        false
+    } else if cli.cache {
+        true
+    } else {
+        // Default behavior: enable cache for watch mode, disable for single runs
+        cli.watch
+    };
+    
     // Set up progress callback with enhanced UI
     let file_count = expanded_files.len();
     let start_time = Instant::now();
@@ -523,7 +599,7 @@ async fn run_analysis_once(cli: &Cli) -> Result<()> {
         main_pb.set_message("Initializing...".to_string());
     }
     
-    let analyzer = DependencyAnalyzer::new(options)?;
+    let mut analyzer = DependencyAnalyzer::new(options)?;
     let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
     
     if show_progress {
@@ -531,6 +607,9 @@ async fn run_analysis_once(cli: &Cli) -> Result<()> {
     }
     
     let elapsed = start_time.elapsed();
+    
+    // Get cache statistics
+    let cache_stats = analyzer.get_cache_stats();
     
     // Enhanced completion message with statistics
     if !cli.watch {
@@ -550,14 +629,32 @@ async fn run_analysis_once(cli: &Cli) -> Result<()> {
             style("🧵").bright(),
             style(num_threads).bold().cyan()
         );
+        
+        // Show cache statistics if caching was enabled
+        if cache_stats.cached_files > 0 || cache_stats.hits > 0 || cache_stats.misses > 0 {
+            println!("{} Cache: {} hits, {} misses ({:.1}% hit rate), {} files cached", 
+                style("💾").bright(),
+                style(cache_stats.hits).bold().green(),
+                style(cache_stats.misses).bold().yellow(),
+                cache_stats.hit_rate,
+                style(cache_stats.cached_files).bold().blue()
+            );
+        }
     } else {
         // Compact output for watch mode
-        println!("  {} {} files, {} deps ({:.2}s, {} threads)", 
+        let cache_info = if cache_stats.hits > 0 {
+            format!(", {}💾", cache_stats.hits)
+        } else {
+            String::new()
+        };
+        
+        println!("  {} {} files, {} deps ({:.2}s, {} threads{})", 
             style("📊").bright(),
             style(file_count).yellow(),
             style(result.tree.len()).yellow(),
             elapsed.as_secs_f64(),
-            style(num_threads).cyan()
+            style(num_threads).cyan(),
+            cache_info
         );
     }
     

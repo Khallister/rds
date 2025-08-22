@@ -4,6 +4,7 @@ pub mod unused;
 
 use anyhow::Result;
 use crate::types::{AnalysisResult, DependencyTree, ParseOptions};
+use crate::cache::CacheStats;
 use tree::TreeBuilder;
 use circular::CircularAnalyzer;
 
@@ -22,7 +23,7 @@ impl DependencyAnalyzer {
         })
     }
     
-    pub async fn analyze_files(&self, entries: &[String]) -> Result<(AnalysisResult, usize)> {
+    pub async fn analyze_files(&mut self, entries: &[String]) -> Result<(AnalysisResult, usize)> {
         // Build dependency tree (now returns thread count too)
         let (tree, num_threads) = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
         
@@ -39,6 +40,11 @@ impl DependencyAnalyzer {
         };
         
         Ok((result, num_threads))
+    }
+    
+    /// Get cache statistics from the tree builder
+    pub fn get_cache_stats(&self) -> CacheStats {
+        self.tree_builder.get_cache_stats()
     }
     
     pub fn analyze_warnings(&self, tree: &DependencyTree) -> Vec<String> {
