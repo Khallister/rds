@@ -1,6 +1,6 @@
 [package]
 name = "rds"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects"
 
@@ -29,6 +29,9 @@ anyhow = "1.0"
 
 # Regex for parsing
 regex = "1.0"
+
+# Parallel processing
+rayon = "1.7"
 
 # Async utilities
 futures = "0.3"

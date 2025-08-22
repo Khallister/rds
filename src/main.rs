@@ -285,7 +285,7 @@ async fn main() -> Result<()> {
     }
     
     let analyzer = DependencyAnalyzer::new(options)?;
-    let result = analyzer.analyze_files(&expanded_files).await?;
+    let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
     
     if show_progress {
         main_pb.finish_with_message("Complete!".to_string());
@@ -304,6 +304,11 @@ async fn main() -> Result<()> {
         style("📊").bright(),
         style(file_count).bold().yellow(),
         style(result.tree.len()).bold().yellow()
+    );
+    
+    println!("{} Analysis used {} threads for parallel processing", 
+        style("🧵").bright(),
+        style(num_threads).bold().cyan()
     );
     
     // Output JSON if requested

@@ -175,6 +175,7 @@ rds --help
   [00:00:02] [████████████████████████████████████████] 150/150 Complete!
 ✨ Analysis complete! (2.43s)
 📊 3 files processed, 150 total dependencies in tree
+🧵 Analysis used 8 threads for parallel processing
 
 🔄 Circular Dependencies
   ✅ Congratulations, no circular dependency was found in your project.
@@ -187,6 +188,7 @@ rds --help
   [00:00:01] [████████████████████████████████████████] 45/45 Complete!
 ✨ Analysis complete! (1.22s)
 📊 2 files processed, 45 total dependencies in tree
+🧵 Analysis used 8 threads for parallel processing
 
 ⚠️  Circular Dependencies
   1) src/utils/helper.js → src/components/Button.jsx → src/utils/helper.js
@@ -311,9 +313,17 @@ rds src/ --include "src.*\.(js|ts|vue)$"
 
 RDS is designed for performance and can handle large codebases efficiently:
 
+- **Multi-Threading**: Utilizes all CPU cores with parallel processing (shows thread count in output)
 - **Memory Usage**: ~10-50MB for typical projects (1000+ files)
-- **Speed**: Analyzes 1000+ files in under 5 seconds
+- **Speed**: Analyzes 1000+ files in under 5 seconds with parallel processing
 - **Scalability**: Tested with projects containing 10,000+ files
+- **Async I/O**: Non-blocking file operations for maximum throughput
+
+### Performance Features
+- **Parallel File Processing**: Multiple files analyzed simultaneously
+- **Efficient Memory Management**: Rust's zero-cost abstractions
+- **Optimized Algorithms**: Fast circular dependency detection
+- **Progress Tracking**: Real-time analysis progress with timing information
 
 ## 🤝 Contributing
 

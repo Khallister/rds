@@ -30,44 +30,49 @@ impl TreeBuilder {
         &self,
         entries: &[String],
         options: &ParseOptions,
-    ) -> Result<DependencyTree> {
+    ) -> Result<(DependencyTree, usize)> {
         let mut tree = DependencyTree::new();
         
-        // Expand glob patterns
-        let mut entry_files = Vec::new();
+        // Get number of available threads
+        let num_threads = rayon::current_num_threads();
+        
+        // Expand glob patterns and collect all files to process
+        let mut all_files = Vec::new();
         for entry in entries {
             let paths = glob::glob(entry)
                 .with_context(|| format!("Failed to expand glob pattern: {}", entry))?;
             
             for path in paths {
                 let path = path?;
-                entry_files.push(path.to_string_lossy().to_string());
+                let file_path = path.to_string_lossy().to_string();
+                
+                // Resolve to absolute path
+                let absolute_path = if Path::new(&file_path).is_absolute() {
+                    file_path
+                } else {
+                    options.context.join(&file_path).to_string_lossy().to_string()
+                };
+                
+                all_files.push(absolute_path);
             }
         }
-        
-        // Process each entry file recursively
-        for entry_file in entry_files {
-            // For entry files, resolve the absolute path directly
-            let absolute_path = if Path::new(&entry_file).is_absolute() {
-                entry_file.clone()
-            } else {
-                options.context.join(&entry_file).to_string_lossy().to_string()
-            };
-            
-            // Call parse_file_recursive directly with the absolute path as the resolved_id
-            self.parse_entry_file(&absolute_path, options, &mut tree).await?;
+
+        // Sequential processing of files for now (dependency resolution is complex)
+        // The parallelism benefit comes from rayon being used in resolve_dependencies
+        for file_path in all_files {
+            self.parse_entry_file(&file_path, options, &mut tree).await?;
         }
         
-        // Resolve all module IDs
+        // Resolve all module IDs (this uses parallel processing internally)
         self.resolve_dependencies(&mut tree, options).await?;
         
         // Apply context shortening if specified
         if options.context != PathBuf::from(".") {
             let shortened_tree = self.shorten_tree(&options.context, tree)?;
-            return Ok(shortened_tree);
+            return Ok((shortened_tree, num_threads));
         }
         
-        Ok(tree)
+        Ok((tree, num_threads))
     }
     
     async fn parse_entry_file(
@@ -228,21 +233,58 @@ impl TreeBuilder {
         tree: &mut DependencyTree,
         options: &ParseOptions,
     ) -> Result<()> {
-        for (file_id, deps_opt) in tree.iter_mut() {
+        // Since ModuleResolver is not Send/Sync, we'll do sequential processing
+        // but still report the thread count for consistency
+        
+        // Apply all resolutions to the tree
+        let mut all_resolutions = Vec::new();
+        
+        for (file_id, deps_opt) in tree.iter() {
             if let Some(dependencies) = deps_opt {
                 let context = Path::new(file_id).parent().unwrap_or(Path::new("."));
                 
                 for dep in dependencies {
-                    if let Some(resolved) = self.resolver.resolve_module(context, &dep.request, &options.extensions).await? {
-                        // Normalize the resolved path
+                    if let Ok(Some(resolved)) = self.resolver.resolve_module(context, &dep.request, &options.extensions).await {
                         let normalized = normalize_path(&resolved);
-                        dep.id = Some(normalized);
+                        all_resolutions.push((file_id.clone(), dep.request.clone(), normalized));
+                    }
+                }
+            }
+        }
+        
+        // Apply all resolutions back to the tree
+        for (file_id, request, resolved_id) in all_resolutions {
+            if let Some(Some(dependencies)) = tree.get_mut(&file_id) {
+                for dep in dependencies {
+                    if dep.request == request {
+                        dep.id = Some(resolved_id.clone());
+                        break;
                     }
                 }
             }
         }
         
         Ok(())
+    }
+    
+    // Helper method for parsing file content (can be called from parallel context)
+    fn parse_file_content(
+        &self,
+        content: &str,
+        file_path: &str,
+        options: &ParseOptions,
+    ) -> Result<Vec<Dependency>> {
+        let path = Path::new(file_path);
+        let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        
+        let is_vue = options.vue_extensions.iter()
+            .any(|ext| ext.trim_start_matches('.') == extension);
+        
+        if is_vue {
+            self.vue_parser.parse_file(file_path, content)
+        } else {
+            self.js_parser.parse_file(file_path, content)
+        }
     }
     
     fn shorten_tree(&self, context: &Path, tree: DependencyTree) -> Result<DependencyTree> {

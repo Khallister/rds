@@ -22,9 +22,9 @@ impl DependencyAnalyzer {
         })
     }
     
-    pub async fn analyze_files(&self, entries: &[String]) -> Result<AnalysisResult> {
-        // Build dependency tree
-        let tree = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
+    pub async fn analyze_files(&self, entries: &[String]) -> Result<(AnalysisResult, usize)> {
+        // Build dependency tree (now returns thread count too)
+        let (tree, num_threads) = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
         
         // Find circular dependencies
         let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
@@ -32,11 +32,13 @@ impl DependencyAnalyzer {
         // Convert entries to resolved paths (simplified for now)
         let resolved_entries = entries.to_vec();
         
-        Ok(AnalysisResult {
+        let result = AnalysisResult {
             entries: resolved_entries,
             tree,
             circulars,
-        })
+        };
+        
+        Ok((result, num_threads))
     }
     
     pub fn analyze_warnings(&self, tree: &DependencyTree) -> Vec<String> {
