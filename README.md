@@ -28,6 +28,21 @@
 
 ## 🚀 Installation
 
+### Via NPM (Recommended)
+
+```bash
+# Global installation
+npm install -g rds-analyzer
+
+# Or use without installation
+npx rds-analyzer --help
+
+# Project-specific installation
+npm install --save-dev rds-analyzer
+```
+
+### From Source
+
 ```bash
 # Build from source
 git clone https://github.com/yourusername/rds.git

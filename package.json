@@ -1,0 +1,55 @@
+{
+  "name": "rds-analyzer",
+  "version": "0.1.0",
+  "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
+  "main": "index.js",
+  "bin": {
+    "rds": "./bin/rds"
+  },
+  "scripts": {
+    "postinstall": "node install.js",
+    "build": "cargo build --release",
+    "test": "cargo test"
+  },
+  "keywords": [
+    "dependency",
+    "analyzer",
+    "circular",
+    "dependencies",
+    "typescript",
+    "javascript",
+    "vue",
+    "rust",
+    "cli",
+    "static-analysis"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Khallister/rds.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Khallister/rds/issues"
+  },
+  "homepage": "https://github.com/Khallister/rds#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux", 
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "install.js",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ]
+}
