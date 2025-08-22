@@ -267,10 +267,10 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
         style("💡 Press Ctrl+C to exit. Files will be analyzed incrementally on change.").dim()
     );
     
-    // Track changed files for intelligent analysis
+    // Track changed files for intelligent analysis with cancellation
     let mut changed_files: HashSet<String> = HashSet::new();
     let mut last_change = Instant::now();
-    let mut analysis_running = false;
+    let mut analysis_task: Option<tokio::task::JoinHandle<()>> = None;
     
     // Handle file system events
     const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
@@ -288,17 +288,19 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                         style(new_changed_files.join(", ")).dim()
                     );
                     
-                    if analysis_running {
-                        println!("{} Analysis in progress, will re-analyze after completion", 
-                            style("🔄").yellow()
+                    // Cancel any running analysis
+                    if let Some(task) = analysis_task.take() {
+                        task.abort();
+                        println!("{} Cancelling previous analysis, {} new changes detected", 
+                            style("🔄").yellow(),
+                            style(new_changed_files.len()).bold()
                         );
                     }
                 }
             },
             _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
-                if !changed_files.is_empty() && !analysis_running && last_change.elapsed() >= DEBOUNCE_DURATION {
+                if !changed_files.is_empty() && analysis_task.is_none() && last_change.elapsed() >= DEBOUNCE_DURATION {
                     let files_to_analyze: Vec<String> = changed_files.drain().collect();
-                    analysis_running = true;
                     
                     println!("\n{} Analyzing {} changed file(s) and their dependencies...", 
                         style("🔍").bright(),
@@ -313,26 +315,36 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                         );
                     }
                     
-                    // Run incremental analysis (analyze only the changed files)
-                    let mut cli_clone = cli.clone();
-                    cli_clone.files = files_to_analyze;
-                    
-                    match run_analysis_once(&cli_clone).await {
-                        Ok(_) => {
-                            println!("{} Incremental analysis complete\n", 
-                                style("✅").bright()
-                            );
-                        },
-                        Err(e) => {
-                            eprintln!("{} Analysis failed: {}\n", 
-                                style("❌").bright().red(),
-                                e
-                            );
+                    // Spawn cancellable analysis task
+                    let cli_clone = cli.clone();
+                    analysis_task = Some(tokio::spawn(async move {
+                        let mut cli_with_files = cli_clone;
+                        cli_with_files.files = files_to_analyze;
+                        
+                        match run_analysis_once(&cli_with_files).await {
+                            Ok(_) => {
+                                println!("{} Incremental analysis complete\n", 
+                                    style("✅").bright()
+                                );
+                            },
+                            Err(e) => {
+                                eprintln!("{} Analysis failed: {}\n", 
+                                    style("❌").bright().red(),
+                                    e
+                                );
+                            }
                         }
-                    }
-                    
-                    analysis_running = false;
+                    }));
                 }
+            },
+            // Check if analysis task completed
+            Some(_) = async {
+                match &mut analysis_task {
+                    Some(task) => task.await.ok(),
+                    None => std::future::pending().await,
+                }
+            } => {
+                analysis_task = None;
             },
             _ = tokio::signal::ctrl_c() => {
                 println!("\n{} {}", 
