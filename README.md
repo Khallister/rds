@@ -99,17 +99,23 @@ rds src/index.js -o results.json
 # Use with TypeScript configuration
 rds src/index.ts --tsconfig ./tsconfig.json
 
+# Enable file caching for faster analysis
+rds src/ --cache
+
 # Watch mode: monitor files and re-analyze on changes
 rds src/ --watch
 
-# Watch mode with circular dependency detection
-rds src/ --watch --circular
+# Watch mode with caching (recommended for development)
+rds src/ --watch --cache --circular
 
 # Watch mode with tree view and take limit
 rds src/ --watch --tree --take 1
 
 # Filter specific file types
 rds src/ --filter "js,ts,vue"
+
+# Get version information
+rds --version
 ```
 
 ## 🎯 Command Line Options
@@ -126,6 +132,8 @@ rds --help
 | `<FILES>...` | Files or directories to analyze | `rds src/` |
 | `-o, --output <FILE>` | Output results to JSON file | `rds src/ -o deps.json` |
 | `--context <DIR>` | Set working directory context | `rds src/ --context ./app` |
+| `--version` | Display version information and exit | `rds --version` |
+| `-h, --help` | Show help information and exit | `rds --help` |
 
 ### Analysis Options
 
@@ -168,6 +176,14 @@ rds --help
 |------|-------------|---------|
 | `--tsconfig <FILE>` | Use specific TypeScript config | `--tsconfig ./tsconfig.json` |
 | `--transform` | Enable TypeScript transformations | `rds src/ --transform` |
+
+### Performance Options
+
+| Flag | Description | Use Case |
+|------|-------------|----------|
+| `--cache` | Enable file caching for faster repeated analysis | Ideal for watch mode and development |
+| `--no-cache` | Disable file caching (override default) | Force fresh analysis, debugging |
+| `-W, --watch` | Monitor files for changes and re-analyze | Development workflow, live monitoring |
 
 ### Advanced Options
 

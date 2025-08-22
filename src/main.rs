@@ -119,6 +119,7 @@ fn should_include_file(path: &Path, filter_extensions: &Option<Vec<String>>) -> 
 #[derive(Parser, Clone)]
 #[command(name = "rds")]
 #[command(about = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects")]
+#[command(version)]
 pub struct Cli {
     #[arg(required = true, help = "Input files or directories to analyze")]
     files: Vec<String>,
@@ -215,9 +216,10 @@ async fn main() -> Result<()> {
 }
 
 async fn run_watch_mode(cli: &Cli) -> Result<()> {
-    println!("{} {}", 
+    println!("{} {} ({})", 
         style("👁️").bright().bold(),
-        style("Starting watch mode...").bold().cyan()
+        style("Starting watch mode...").bold().cyan(),
+        style(format!("rds v{}", env!("CARGO_PKG_VERSION"))).dim()
     );
     
     // Expand directories and apply filters
@@ -602,9 +604,10 @@ async fn run_analysis_once(cli: &Cli) -> Result<()> {
     
     // Start analysis with enhanced output
     if !cli.watch {
-        println!("{} {}", 
+        println!("{} {} ({})", 
             style("🚀").bright().bold(),
-            style("Starting dependency analysis...").bold().blue()
+            style("Starting dependency analysis...").bold().blue(),
+            style(format!("rds v{}", env!("CARGO_PKG_VERSION"))).dim()
         );
     }
     
