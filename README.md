@@ -13,6 +13,7 @@
 - 💾 **Memory Efficient** - Handles large codebases with minimal RAM usage
 - 🎨 **Beautiful Output** - Colorized, emoji-rich terminal output
 - 📊 **Detailed Statistics** - Execution time, file counts, and progress tracking
+- ⚡ **Fast Failure Mode** - `--take <COUNT>` flag for quick CI/CD checks
 - 🔧 **CI/CD Ready** - Perfect for automation and git hooks
 - 🎯 **Zero Configuration** - Works out of the box with sensible defaults
 
@@ -73,8 +74,17 @@ rds "src/**/*.{js,ts,vue}"
 ### Advanced Usage
 
 ```bash
-# Show dependency tree structure
+# Show dependency tree structure only
 rds src/index.js --tree
+
+# Show circular dependencies only
+rds src/index.js --circular
+
+# Limit circular dependency search (fast CI checks)
+rds src/index.js --take 1 --throw
+
+# Find at most 5 circular dependencies
+rds src/index.js --circular --take 5
 
 # Enable verbose logging
 rds src/index.js --log
@@ -94,6 +104,11 @@ rds src/ --filter "js,ts,vue"
 
 ## 🎯 Command Line Options
 
+For comprehensive help with detailed descriptions of all options:
+```bash
+rds --help
+```
+
 ### Core Options
 
 | Flag | Description | Example |
@@ -106,9 +121,12 @@ rds src/ --filter "js,ts,vue"
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--circular` | Show circular dependencies | ✅ Enabled |
-| `--tree` | Show dependency tree structure | ❌ Disabled |
+| `--circular` | Show circular dependencies only | ❌ Disabled* |
+| `--tree` | Show dependency tree structure only | ❌ Disabled* |
 | `--warning` | Show detailed warnings | ❌ Disabled |
+| `--take <COUNT>` | Limit max circular dependencies to find | None (find all) |
+
+***Default Behavior**: When neither `--tree` nor `--circular` is specified, both are shown.*
 
 ### Output Options
 
@@ -188,6 +206,30 @@ rds src/ --filter "js,ts,vue"
           - 1) src/utils/api.js
 ```
 
+## ⚡ Performance & Efficiency Features
+
+### Fast Circular Dependency Detection
+
+The `--take <COUNT>` flag allows you to limit the search and get results faster:
+
+```bash
+# Stop after finding 1 circular dependency (fastest)
+rds src/ --take 1 --circular
+
+# Find at most 3 circular dependencies  
+rds src/ --take 3
+
+# Example output with limit reached:
+⚠️  Circular Dependencies
+  1) src/utils/helper.js → src/components/Button.jsx
+  At least 1 circular dependencies found (search limit reached)
+```
+
+**Use Cases:**
+- **CI/CD Pipelines**: Fast failure with `--take 1 --throw`
+- **Large Codebases**: Avoid long analysis times with reasonable limits
+- **Development**: Quick feedback during refactoring
+
 ## 🔄 CI/CD Integration
 
 ### Git Pre-commit Hook
@@ -195,7 +237,9 @@ rds src/ --filter "js,ts,vue"
 ```bash
 #!/bin/bash
 # .git/hooks/pre-commit
-rds src/ --throw
+
+# Fast check - fail immediately on first circular dependency
+rds src/ --take 1 --throw
 if [ $? -ne 0 ]; then
     echo "❌ Commit rejected: Circular dependencies detected!"
     exit 1
@@ -217,7 +261,9 @@ jobs:
           # Build or download rds binary
           cargo build --release
       - name: Check for circular dependencies
-        run: ./target/release/rds src/ --throw
+        run: |
+          # Fast check for CI - fail after first circular dependency found
+          ./target/release/rds src/ --take 1 --throw
 ```
 
 ### Package.json Scripts
@@ -225,7 +271,8 @@ jobs:
 ```json
 {
   "scripts": {
-    "deps:check": "rds src/ --throw",
+    "deps:check": "rds src/ --take 1 --throw",
+    "deps:check-all": "rds src/ --throw", 
     "deps:tree": "rds src/ --tree",
     "deps:analyze": "rds src/ --tree --warning -o deps.json"
   }

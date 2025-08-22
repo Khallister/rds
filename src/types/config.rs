@@ -13,6 +13,7 @@ pub struct ParseOptions {
     pub transform: bool,
     pub skip_dynamic_imports: SkipDynamicImports,
     pub progress_callback: Option<Box<dyn Fn(ProgressEvent, &str) + Send + Sync>>,
+    pub take: Option<usize>,
 }
 
 impl std::fmt::Debug for ParseOptions {
@@ -29,6 +30,7 @@ impl std::fmt::Debug for ParseOptions {
             .field("transform", &self.transform)
             .field("skip_dynamic_imports", &self.skip_dynamic_imports)
             .field("progress_callback", &"<function>")
+            .field("take", &self.take)
             .finish()
     }
 }
@@ -75,6 +77,7 @@ impl Default for ParseOptions {
             transform: false,
             skip_dynamic_imports: SkipDynamicImports::Never,
             progress_callback: None,
+            take: None,
         }
     }
 }

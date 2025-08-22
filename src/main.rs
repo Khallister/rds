@@ -116,44 +116,69 @@ fn should_include_file(path: &Path, filter_extensions: &Option<Vec<String>>) -> 
 #[command(name = "rds")]
 #[command(about = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects")]
 pub struct Cli {
-    #[arg(required = true)]
+    #[arg(required = true, help = "Input files or directories to analyze")]
     files: Vec<String>,
-    #[arg(long)]
+    
+    #[arg(long, help = "Base directory for resolving relative paths")]
     context: Option<PathBuf>,
-    #[arg(long, alias = "ext", default_value = ".ts,.tsx,.mjs,.js,.jsx,.json,.vue")]
+    
+    #[arg(long, alias = "ext", default_value = ".ts,.tsx,.mjs,.js,.jsx,.json,.vue", 
+          help = "File extensions to analyze (comma-separated)")]
     extensions: String,
-    #[arg(long, default_value = ".ts,.tsx,.mjs,.js,.jsx")]
+    
+    #[arg(long, default_value = ".ts,.tsx,.mjs,.js,.jsx", 
+          help = "JavaScript file extensions (comma-separated)")]
     js: String,
+    
     #[arg(long, help = "Filter files by extension when scanning directories (e.g., 'js,ts,vue')")]
     filter: Option<String>,
-    #[arg(long, default_value = ".*")]
+    
+    #[arg(long, default_value = ".*", help = "Regex pattern for files to include")]
     include: String,
-    #[arg(long, default_value = "node_modules|\\.git|\\.svn|\\.hg|coverage|dist|build|out|\\.next|\\.nuxt")]
+    
+    #[arg(long, default_value = "node_modules|\\.git|\\.svn|\\.hg|coverage|dist|build|out|\\.next|\\.nuxt",
+          help = "Regex pattern for files/directories to exclude")]
     exclude: String,
-    #[arg(short = 'o', long)]
+    
+    #[arg(short = 'o', long, help = "Output file path for JSON results")]
     output: Option<PathBuf>,
-    #[arg(long, action = clap::ArgAction::SetTrue)]
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Show dependency tree visualization")]
     tree: bool,
-    #[arg(long, action = clap::ArgAction::SetTrue, default_value = "true")]
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, 
+          help = "Detect and show circular dependencies")]
     circular: bool,
-    #[arg(long, action = clap::ArgAction::SetTrue)]
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Show warning messages during analysis")]
     warning: bool,
-    #[arg(long, action = clap::ArgAction::SetTrue)]
+    
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Enable verbose logging output")]
     log: bool,
+    
     #[arg(long, action = clap::ArgAction::SetTrue, help = "Exit with code 1 if circular dependencies are found")]
     throw: bool,
-    #[arg(long)]
+    
+    #[arg(long, help = "Path to tsconfig.json for TypeScript path resolution")]
     tsconfig: Option<PathBuf>,
-    #[arg(short = 'T', long)]
+    
+    #[arg(short = 'T', long, help = "Enable code transformations during parsing")]
     transform: bool,
-    #[arg(long)]
+    
+    #[arg(long, help = "Custom exit codes (format: 'case:code,case:code')")]
     exit_code: Option<String>,
-    #[arg(long)]
+    
+    #[arg(long, help = "Show progress bar (auto-detected if not specified)")]
     progress: Option<bool>,
-    #[arg(long)]
+    
+    #[arg(long, help = "Pattern to detect unused files from")]
     detect_unused_files_from: Option<String>,
-    #[arg(long, value_enum)]
+    
+    #[arg(long, value_enum, help = "Skip dynamic imports in tree or circular analysis")]
     skip_dynamic_imports: Option<SkipDynamicImportsArg>,
+    
+    #[arg(long, help = "Maximum number of circular dependencies to find before stopping")]
+    take: Option<usize>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -194,6 +219,7 @@ async fn main() -> Result<()> {
     
     options.tsconfig = cli.tsconfig;
     options.transform = cli.transform;
+    options.take = cli.take;
     
     options.skip_dynamic_imports = match cli.skip_dynamic_imports {
         Some(SkipDynamicImportsArg::Tree) => SkipDynamicImports::Tree,
@@ -289,12 +315,16 @@ async fn main() -> Result<()> {
     // Console output
     let console_output = ConsoleOutput::new();
     
-    if cli.tree {
+    // Default behavior: show both tree and circular if neither flag is explicitly set
+    let show_tree = cli.tree || (!cli.tree && !cli.circular);
+    let show_circular = cli.circular || (!cli.tree && !cli.circular);
+    
+    if show_tree {
         console_output.print_tree(&result.tree, &result.entries);
     }
     
-    if cli.circular {
-        console_output.print_circular(&result.circulars);
+    if show_circular {
+        console_output.print_circular(&result.circulars, cli.take);
     }
     
     if cli.warning {

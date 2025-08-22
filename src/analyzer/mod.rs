@@ -27,7 +27,7 @@ impl DependencyAnalyzer {
         let tree = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
         
         // Find circular dependencies
-        let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports);
+        let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
         
         // Convert entries to resolved paths (simplified for now)
         let resolved_entries = entries.to_vec();

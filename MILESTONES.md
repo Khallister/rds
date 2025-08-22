@@ -199,5 +199,5 @@ This document outlines the planned features and improvements for RDS (Rust Depen
 
 ---
 
-*Last updated: January 2025*
-*Current version: 0.1.0*
+*Last updated: August 2025*
+*Current version: 0.2.0 - Added `--take <COUNT>` flag and comprehensive help descriptions*

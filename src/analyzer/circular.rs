@@ -12,14 +12,29 @@ impl CircularAnalyzer {
         &self,
         tree: &DependencyTree,
         skip_dynamic_imports: &SkipDynamicImports,
+        max_count: Option<usize>,
     ) -> Vec<Vec<String>> {
         let mut circulars = Vec::new();
         let mut tree_copy = tree.clone();
         
         // Visit all nodes to find cycles
         for id in tree.keys() {
+            // Early exit if we've found enough circular dependencies
+            if let Some(max) = max_count {
+                if circulars.len() >= max {
+                    break;
+                }
+            }
+            
             if tree_copy.contains_key(id) {
-                self.visit_node(id.clone(), Vec::new(), &mut tree_copy, &mut circulars, skip_dynamic_imports);
+                self.visit_node(
+                    id.clone(), 
+                    Vec::new(), 
+                    &mut tree_copy, 
+                    &mut circulars, 
+                    skip_dynamic_imports,
+                    max_count
+                );
             }
         }
         
@@ -33,7 +48,15 @@ impl CircularAnalyzer {
         tree: &mut DependencyTree,
         circulars: &mut Vec<Vec<String>>,
         skip_dynamic_imports: &SkipDynamicImports,
+        max_count: Option<usize>,
     ) {
+        // Early exit if we've found enough circular dependencies
+        if let Some(max) = max_count {
+            if circulars.len() >= max {
+                return;
+            }
+        }
+        
         // Check if we've found a cycle
         if let Some(index) = path.iter().position(|x| x == &id) {
             // Found a cycle - extract the circular part
@@ -53,6 +76,13 @@ impl CircularAnalyzer {
             path.push(id.clone());
             
             for dep in dependencies {
+                // Early exit if we've found enough circular dependencies
+                if let Some(max) = max_count {
+                    if circulars.len() >= max {
+                        break;
+                    }
+                }
+                
                 if let Some(dep_id) = &dep.id {
                     // Skip dynamic imports if configured to do so for circular detection
                     if *skip_dynamic_imports == SkipDynamicImports::Circular 
@@ -60,7 +90,7 @@ impl CircularAnalyzer {
                         continue;
                     }
                     
-                    self.visit_node(dep_id.clone(), path.clone(), tree, circulars, skip_dynamic_imports);
+                    self.visit_node(dep_id.clone(), path.clone(), tree, circulars, skip_dynamic_imports, max_count);
                 }
             }
         }

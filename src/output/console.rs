@@ -94,7 +94,7 @@ impl ConsoleOutput {
         }
     }
     
-    pub fn print_circular(&self, circulars: &[Vec<String>]) {
+    pub fn print_circular(&self, circulars: &[Vec<String>], take_limit: Option<usize>) {
         let header = if circulars.is_empty() {
             style("🔄 Circular Dependencies").bold().green()
         } else {
@@ -120,6 +120,16 @@ impl ConsoleOutput {
                     width = digits
                 );
                 println!("{}", style(line).dim());
+            }
+            
+            // Show "at least N" message if we hit the take limit
+            if let Some(limit) = take_limit {
+                if circulars.len() >= limit {
+                    println!("  {}", 
+                        style(format!("At least {} circular dependencies found (search limit reached)", limit))
+                            .bold().yellow()
+                    );
+                }
             }
         }
         
