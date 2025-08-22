@@ -8,10 +8,12 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::fs;
+use tokio::sync::mpsc;
 
 use crate::analyzer::DependencyAnalyzer;
 use crate::types::{ParseOptions, SkipDynamicImports};
@@ -112,7 +114,7 @@ fn should_include_file(path: &Path, filter_extensions: &Option<Vec<String>>) -> 
     }
 }
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(name = "rds")]
 #[command(about = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects")]
 pub struct Cli {
@@ -179,6 +181,10 @@ pub struct Cli {
     
     #[arg(long, help = "Maximum number of circular dependencies to find before stopping")]
     take: Option<usize>,
+    
+    #[arg(short = 'W', long, action = clap::ArgAction::SetTrue, 
+          help = "Watch mode: monitor files for changes and re-run analysis")]
+    watch: bool,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -191,6 +197,225 @@ pub enum SkipDynamicImportsArg {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     
+    if cli.watch {
+        run_watch_mode(&cli).await
+    } else {
+        run_analysis_once(&cli).await
+    }
+}
+
+async fn run_watch_mode(cli: &Cli) -> Result<()> {
+    println!("{} {}", 
+        style("👁️").bright().bold(),
+        style("Starting watch mode...").bold().cyan()
+    );
+    
+    // Expand directories and apply filters
+    let expanded_files = expand_file_inputs(&cli.files, &cli.filter).await?;
+    if expanded_files.is_empty() {
+        eprintln!("No files found to watch.");
+        return Ok(());
+    }
+    
+    // Set up file watcher
+    let (tx, mut rx) = mpsc::channel(100);
+    
+    // Create a watcher
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<Event, notify::Error>| {
+            match res {
+                Ok(event) => {
+                    if let Err(e) = tx.blocking_send(event) {
+                        eprintln!("Watch channel send error: {}", e);
+                    }
+                },
+                Err(e) => eprintln!("Watch error: {}", e),
+            }
+        },
+        Config::default(),
+    )?;
+    
+    // Watch all directories that contain our target files
+    let mut watched_dirs = std::collections::HashSet::new();
+    for file in &expanded_files {
+        if let Some(parent) = Path::new(file).parent() {
+            watched_dirs.insert(parent.to_path_buf());
+        }
+    }
+    
+    // Also watch the input directories directly
+    for input in &cli.files {
+        let path = Path::new(input);
+        if path.is_dir() {
+            watched_dirs.insert(path.to_path_buf());
+        } else if let Some(parent) = path.parent() {
+            watched_dirs.insert(parent.to_path_buf());
+        }
+    }
+    
+    for dir in &watched_dirs {
+        if dir.exists() {
+            watcher.watch(dir, RecursiveMode::Recursive)?;
+            println!("{} Watching: {}", 
+                style("📂").cyan(),
+                style(dir.display()).dim()
+            );
+        }
+    }
+    
+    println!("{}", 
+        style("💡 Press Ctrl+C to exit. Files will be analyzed incrementally on change.").dim()
+    );
+    
+    // Track changed files for intelligent analysis
+    let mut changed_files: HashSet<String> = HashSet::new();
+    let mut last_change = Instant::now();
+    let mut analysis_running = false;
+    
+    // Handle file system events
+    const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
+    
+    loop {
+        tokio::select! {
+            Some(event) = rx.recv() => {
+                let new_changed_files = extract_relevant_file_changes(&event, &expanded_files);
+                if !new_changed_files.is_empty() {
+                    changed_files.extend(new_changed_files.clone());
+                    last_change = Instant::now();
+                    
+                    println!("{} File changes detected: {}", 
+                        style("📝").dim(),
+                        style(new_changed_files.join(", ")).dim()
+                    );
+                    
+                    if analysis_running {
+                        println!("{} Analysis in progress, will re-analyze after completion", 
+                            style("🔄").yellow()
+                        );
+                    }
+                }
+            },
+            _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                if !changed_files.is_empty() && !analysis_running && last_change.elapsed() >= DEBOUNCE_DURATION {
+                    let files_to_analyze: Vec<String> = changed_files.drain().collect();
+                    analysis_running = true;
+                    
+                    println!("\n{} Analyzing {} changed file(s) and their dependencies...", 
+                        style("🔍").bright(),
+                        style(files_to_analyze.len()).bold().yellow()
+                    );
+                    
+                    // Show which files changed
+                    for file in &files_to_analyze {
+                        println!("  {} {}", 
+                            style("�").dim(),
+                            style(file).dim()
+                        );
+                    }
+                    
+                    // Run incremental analysis (analyze only the changed files)
+                    let mut cli_clone = cli.clone();
+                    cli_clone.files = files_to_analyze;
+                    
+                    match run_analysis_once(&cli_clone).await {
+                        Ok(_) => {
+                            println!("{} Incremental analysis complete\n", 
+                                style("✅").bright()
+                            );
+                        },
+                        Err(e) => {
+                            eprintln!("{} Analysis failed: {}\n", 
+                                style("❌").bright().red(),
+                                e
+                            );
+                        }
+                    }
+                    
+                    analysis_running = false;
+                }
+            },
+            _ = tokio::signal::ctrl_c() => {
+                println!("\n{} {}", 
+                    style("👋").bright(),
+                    style("Stopping watch mode...").bold().cyan()
+                );
+                break;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
+    let mut changed_files = Vec::new();
+    
+    match event.kind {
+        EventKind::Create(_) | EventKind::Modify(_) => {
+            for path in &event.paths {
+                let path_str = path.to_string_lossy();
+                
+                // Check if this file matches our watched extensions
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if matches!(ext, "js" | "jsx" | "ts" | "tsx" | "vue" | "mjs" | "json") {
+                        // Skip node_modules and other irrelevant directories
+                        if !path_str.contains("node_modules") 
+                           && !path_str.contains(".git") 
+                           && !path_str.contains("dist")
+                           && !path_str.contains("build") {
+                            
+                            // Normalize the path and add it
+                            let normalized = normalize_path_string(&path_str);
+                            changed_files.push(normalized);
+                        }
+                    }
+                }
+            }
+        },
+        _ => {}
+    }
+    
+    changed_files
+}
+
+fn normalize_path_string(path: &str) -> String {
+    Path::new(path).to_string_lossy().replace("\\", "/")
+}
+
+fn should_trigger_analysis(event: &Event, watched_files: &[String]) -> bool {
+    match event.kind {
+        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+            // Check if any of the changed paths are relevant
+            for path in &event.paths {
+                let path_str = path.to_string_lossy();
+                
+                // Check if this file matches our watched extensions
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if matches!(ext, "js" | "jsx" | "ts" | "tsx" | "vue" | "mjs" | "json") {
+                        // Skip node_modules and other irrelevant directories
+                        if !path_str.contains("node_modules") 
+                           && !path_str.contains(".git") 
+                           && !path_str.contains("dist")
+                           && !path_str.contains("build") {
+                            return true;
+                        }
+                    }
+                }
+                
+                // Also check if it directly matches any of our target files
+                for watched_file in watched_files {
+                    if path_str.contains(watched_file) || watched_file.contains(path_str.as_ref()) {
+                        return true;
+                    }
+                }
+            }
+        },
+        _ => {}
+    }
+    false
+}
+
+async fn run_analysis_once(cli: &Cli) -> Result<()> {
     let show_progress = cli.progress.unwrap_or_else(|| {
         atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err()
     });
@@ -204,8 +429,8 @@ async fn main() -> Result<()> {
 
     let mut options = ParseOptions::default();
     
-    if let Some(context) = cli.context {
-        options.context = context;
+    if let Some(context) = &cli.context {
+        options.context = context.clone();
     }
     
     options.extensions = cli.extensions.split(',').map(|s| s.to_string()).collect();
@@ -217,7 +442,7 @@ async fn main() -> Result<()> {
     // This resolves but doesn't recursively analyze node_modules dependencies
     options.dependency_exclude = regex::Regex::new(r"node_modules|\.git|\.svn|\.hg")?;
     
-    options.tsconfig = cli.tsconfig;
+    options.tsconfig = cli.tsconfig.clone();
     options.transform = cli.transform;
     options.take = cli.take;
     
@@ -275,10 +500,12 @@ async fn main() -> Result<()> {
     }
     
     // Start analysis with enhanced output
-    println!("{} {}", 
-        style("🚀").bright().bold(),
-        style("Starting dependency analysis...").bold().blue()
-    );
+    if !cli.watch {
+        println!("{} {}", 
+            style("🚀").bright().bold(),
+            style("Starting dependency analysis...").bold().blue()
+        );
+    }
     
     if show_progress {
         main_pb.set_message("Initializing...".to_string());
@@ -294,22 +521,33 @@ async fn main() -> Result<()> {
     let elapsed = start_time.elapsed();
     
     // Enhanced completion message with statistics
-    println!("{} {} {}", 
-        style("✨").bright().bold(),
-        style("Analysis complete!").bold().green(),
-        style(format!("({:.2}s)", elapsed.as_secs_f64())).dim()
-    );
-    
-    println!("{} {} files processed, {} total dependencies in tree", 
-        style("📊").bright(),
-        style(file_count).bold().yellow(),
-        style(result.tree.len()).bold().yellow()
-    );
-    
-    println!("{} Analysis used {} threads for parallel processing", 
-        style("🧵").bright(),
-        style(num_threads).bold().cyan()
-    );
+    if !cli.watch {
+        println!("{} {} {}", 
+            style("✨").bright().bold(),
+            style("Analysis complete!").bold().green(),
+            style(format!("({:.2}s)", elapsed.as_secs_f64())).dim()
+        );
+        
+        println!("{} {} files processed, {} total dependencies in tree", 
+            style("📊").bright(),
+            style(file_count).bold().yellow(),
+            style(result.tree.len()).bold().yellow()
+        );
+        
+        println!("{} Analysis used {} threads for parallel processing", 
+            style("🧵").bright(),
+            style(num_threads).bold().cyan()
+        );
+    } else {
+        // Compact output for watch mode
+        println!("  {} {} files, {} deps ({:.2}s, {} threads)", 
+            style("📊").bright(),
+            style(file_count).yellow(),
+            style(result.tree.len()).yellow(),
+            elapsed.as_secs_f64(),
+            style(num_threads).cyan()
+        );
+    }
     
     // Output JSON if requested
     if let Some(output_path) = &cli.output {

@@ -11,6 +11,7 @@
 - 🌳 **Dependency Tree Visualization** - See your project's import structure  
 - ⚡ **High Performance** - Built with Rust for maximum speed
 - 💾 **Memory Efficient** - Handles large codebases with minimal RAM usage
+- 👁️ **Watch Mode** - Monitor files and re-analyze on changes (`--watch`)
 - 🎨 **Beautiful Output** - Colorized, emoji-rich terminal output
 - 📊 **Detailed Statistics** - Execution time, file counts, and progress tracking
 - ⚡ **Fast Failure Mode** - `--take <COUNT>` flag for quick CI/CD checks
@@ -97,6 +98,15 @@ rds src/index.js -o results.json
 
 # Use with TypeScript configuration
 rds src/index.ts --tsconfig ./tsconfig.json
+
+# Watch mode: monitor files and re-analyze on changes
+rds src/ --watch
+
+# Watch mode with circular dependency detection
+rds src/ --watch --circular
+
+# Watch mode with tree view and take limit
+rds src/ --watch --tree --take 1
 
 # Filter specific file types
 rds src/ --filter "js,ts,vue"
@@ -207,6 +217,52 @@ rds --help
           - 5) src/components/Header.jsx
           - 1) src/utils/api.js
 ```
+
+## 👁️ Watch Mode
+
+RDS includes a powerful watch mode that monitors your files and automatically re-runs analysis when changes are detected:
+
+```bash
+# Start watch mode for a directory
+rds src/ --watch
+
+# Watch with specific analysis modes
+rds src/ --watch --circular  # Focus on circular dependencies
+rds src/ --watch --tree      # Show dependency tree on changes
+rds src/ --watch --take 1    # Quick checks with early exit
+```
+
+### Watch Mode Features
+
+- **Smart File Filtering**: Only monitors relevant file types (JS, TS, Vue, etc.)
+- **Debounced Analysis**: Groups rapid changes to avoid excessive re-analysis
+- **Directory Exclusion**: Automatically ignores `node_modules`, `.git`, and build directories
+- **Recursive Monitoring**: Watches subdirectories automatically
+- **Clean Output**: Compact analysis results optimized for watch mode
+- **Graceful Exit**: Use `Ctrl+C` to stop watching
+
+### Watch Mode Output
+
+```bash
+👁️ Starting watch mode...
+📂 Watching: ./src
+📂 Watching: ./components
+💡 Press Ctrl+C to exit, or modify files to trigger analysis
+
+📝 File changes detected, running analysis...
+  📊 3 files, 12 deps (0.05s, 8 threads)
+🔄 Circular Dependencies
+  ✅ No circular dependencies found.
+✅ Analysis complete, watching for changes...
+```
+
+### Development Workflow
+
+Watch mode is perfect for:
+- **Real-time Development**: Instant feedback as you code
+- **Refactoring Sessions**: Monitor dependency changes during restructuring
+- **Code Reviews**: Continuous validation of import structure
+- **Team Development**: Shared watch sessions for collaborative debugging
 
 ## ⚡ Performance & Efficiency Features
 

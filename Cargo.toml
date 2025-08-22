@@ -1,6 +1,6 @@
 [package]
 name = "rds"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects"
 
@@ -15,7 +15,7 @@ console = "0.15"
 indicatif = "0.17"
 
 # Async runtime
-tokio = { version = "1.0", features = ["fs", "macros", "rt-multi-thread"] }
+tokio = { version = "1.0", features = ["fs", "macros", "rt-multi-thread", "sync", "signal", "time"] }
 
 # File operations
 glob = "0.3"
@@ -35,6 +35,9 @@ rayon = "1.7"
 
 # Async utilities
 futures = "0.3"
+
+# File watching
+notify = "6.0"
 
 # Terminal detection
 atty = "0.2"
