@@ -47,6 +47,11 @@ impl DependencyAnalyzer {
         self.tree_builder.get_cache_stats()
     }
     
+    /// Get incremental cache statistics (resets counters)
+    pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
+        self.tree_builder.get_incremental_cache_stats()
+    }
+    
     pub fn analyze_warnings(&self, tree: &DependencyTree) -> Vec<String> {
         let mut warnings = Vec::new();
         

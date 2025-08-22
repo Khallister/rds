@@ -281,6 +281,7 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
     let mut changed_files: HashSet<String> = HashSet::new();
     let mut last_change = Instant::now();
     let mut analysis_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut logged_files: HashSet<String> = HashSet::new(); // Track which files we've already logged
     
     // Create persistent analyzer for watch mode to maintain cache between analyses
     let mut watch_options = ParseOptions::default();
@@ -315,27 +316,43 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
             Some(event) = rx.recv() => {
                 let new_changed_files = extract_relevant_file_changes(&event, &expanded_files);
                 if !new_changed_files.is_empty() {
-                    changed_files.extend(new_changed_files.clone());
-                    last_change = Instant::now();
+                    let mut any_new_files = false;
                     
-                    println!("{} File changes detected: {}", 
-                        style("📝").dim(),
-                        style(new_changed_files.join(", ")).dim()
-                    );
+                    for file in new_changed_files {
+                        if changed_files.insert(file.clone()) {
+                            // This is a new file in this debounce cycle
+                            if !logged_files.contains(&file) {
+                                println!("{} File change detected: {}", 
+                                    style("📝").dim(),
+                                    style(&file).dim()
+                                );
+                                logged_files.insert(file);
+                                any_new_files = true;
+                            }
+                        }
+                    }
                     
-                    // Cancel any running analysis
-                    if let Some(task) = analysis_task.take() {
-                        task.abort();
-                        println!("{} Cancelling previous analysis, {} new changes detected", 
-                            style("🔄").yellow(),
-                            style(new_changed_files.len()).bold()
-                        );
+                    // Update last change time if we had new files
+                    if any_new_files {
+                        last_change = Instant::now();
+                    }
+                    
+                    // Cancel any running analysis if we have any changes
+                    if !changed_files.is_empty() {
+                        if let Some(task) = analysis_task.take() {
+                            task.abort();
+                            println!("{} Cancelling previous analysis, {} changes queued", 
+                                style("🔄").yellow(),
+                                style(changed_files.len()).bold()
+                            );
+                        }
                     }
                 }
             },
             _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
                 if !changed_files.is_empty() && analysis_task.is_none() && last_change.elapsed() >= DEBOUNCE_DURATION {
                     let files_to_analyze: Vec<String> = changed_files.drain().collect();
+                    logged_files.clear(); // Clear logged files for next cycle
                     
                     println!("\n{} Analyzing {} changed file(s) and their dependencies...", 
                         style("🔍").bright(),
@@ -365,11 +382,16 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                         match analyzer.analyze_files(&files_to_analyze_clone).await {
                             Ok((result, num_threads)) => {
                                 let elapsed = start_time.elapsed();
-                                let cache_stats = analyzer.get_cache_stats();
+                                let cache_stats = analyzer.get_incremental_cache_stats(); // Get incremental stats
                                 
                                 // Compact output for watch mode with cache info
                                 let cache_info = if cache_stats.hits > 0 {
-                                    format!(", {}💾", cache_stats.hits)
+                                    let cache_percentage = if cache_stats.hits + cache_stats.misses > 0 {
+                                        (cache_stats.hits as f64) / ((cache_stats.hits + cache_stats.misses) as f64) * 100.0
+                                    } else {
+                                        0.0
+                                    };
+                                    format!(", {:.0}%💾", cache_percentage)
                                 } else {
                                     String::new()
                                 };

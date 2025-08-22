@@ -86,6 +86,11 @@ impl TreeBuilder {
         self.cache.get_stats()
     }
     
+    /// Get incremental cache statistics (resets counters)
+    pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
+        self.cache.get_incremental_stats()
+    }
+    
     async fn parse_entry_file(
         &mut self,
         file_path: &str,

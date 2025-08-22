@@ -145,6 +145,26 @@ impl FileCache {
             },
         }
     }
+    
+    /// Get cache statistics since last call to this method (incremental stats)
+    pub fn get_incremental_stats(&mut self) -> CacheStats {
+        let stats = CacheStats {
+            hits: self.hits,
+            misses: self.misses,
+            cached_files: self.cache.len(),
+            hit_rate: if self.hits + self.misses > 0 {
+                (self.hits as f64) / ((self.hits + self.misses) as f64) * 100.0
+            } else {
+                0.0
+            },
+        };
+        
+        // Reset counters for next measurement
+        self.hits = 0;
+        self.misses = 0;
+        
+        stats
+    }
 
     /// Get the number of cached files
     pub fn cached_files_count(&self) -> usize {
