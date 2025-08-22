@@ -17,6 +17,8 @@ pub struct TreeBuilder {
     vue_parser: VueParser,
     resolver: ModuleResolver,
     cache: FileCache,
+    // Store the last complete analysis result for incremental updates
+    last_analysis: Option<(Vec<String>, DependencyTree)>,
 }
 
 impl TreeBuilder {
@@ -26,6 +28,7 @@ impl TreeBuilder {
             vue_parser: VueParser::new()?,
             resolver: ModuleResolver::new(),
             cache: FileCache::new(true), // Enable cache by default
+            last_analysis: None,
         })
     }
     
@@ -89,6 +92,87 @@ impl TreeBuilder {
     /// Get incremental cache statistics (resets counters)
     pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
         self.cache.get_incremental_stats()
+    }
+    
+    /// Incremental dependency tree build - only analyzes changed files
+    pub async fn build_dependency_tree_incremental(
+        &mut self,
+        changed_files: &[String], 
+        options: &ParseOptions
+    ) -> Result<(DependencyTree, usize)> {
+        
+        // If we have a previous analysis, try to do incremental update
+        if let Some((last_entries, last_tree)) = &self.last_analysis {
+            // For now, if the changed file is the only entry file, check if its dependencies changed
+            if changed_files.len() == 1 {
+                let changed_file = &changed_files[0];
+                
+                // Always parse the file to get new dependencies
+                let content = tokio::fs::read_to_string(changed_file).await?;
+                let path = Path::new(changed_file);
+                let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                
+                let is_vue = extension == "vue";
+                let new_deps = if is_vue {
+                    self.vue_parser.parse_file(changed_file, &content)?
+                } else {
+                    self.js_parser.parse_file(changed_file, &content)?
+                };
+                
+                // Try multiple path normalizations to find the file in previous tree
+                let path_variants = vec![
+                    changed_file.clone(),
+                    changed_file.replace("\\", "/"),
+                    changed_file.replace("/", "\\"),
+                    // Add relative path variants
+                    if let Ok(cwd) = std::env::current_dir() {
+                        let cwd_str = cwd.to_string_lossy().replace("\\", "/");
+                        let cwd_with_slash = format!("{}/", cwd_str);
+                        changed_file.replace(&cwd_with_slash, "")
+                    } else {
+                        changed_file.clone()
+                    },
+                    if let Ok(cwd) = std::env::current_dir() {
+                        let cwd_str = cwd.to_string_lossy().replace("\\", "/");
+                        let cwd_with_slash = format!("{}/", cwd_str);
+                        changed_file.replace(&cwd_with_slash, "").replace("/", "\\")
+                    } else {
+                        changed_file.clone()
+                    },
+                ];
+                
+                let mut found_old_deps = None;
+                
+                for variant in &path_variants {
+                    if let Some(old_deps_opt) = last_tree.get(variant) {
+                        found_old_deps = old_deps_opt.as_ref();
+                        break;
+                    }
+                }
+                
+                if let Some(old_deps) = found_old_deps {
+                    // Compare dependency requests (the import paths)
+                    let old_requests: std::collections::HashSet<&str> = 
+                        old_deps.iter().map(|d| d.request.as_str()).collect();
+                    let new_requests: std::collections::HashSet<&str> = 
+                        new_deps.iter().map(|d| d.request.as_str()).collect();
+                    
+                    if old_requests == new_requests {
+                        // Dependencies haven't changed! Update cache and return previous tree
+                        self.cache.cache_dependencies(changed_file, new_deps.clone()).await?;
+                        return Ok((last_tree.clone(), 8));
+                    }
+                }
+            }
+        }
+        
+        // Fall back to full analysis if incremental isn't possible
+        let (tree, threads) = self.build_dependency_tree(changed_files, options).await?;
+        
+        // Store this analysis for future incremental updates
+        self.last_analysis = Some((changed_files.to_vec(), tree.clone()));
+        
+        Ok((tree, threads))
     }
     
     async fn parse_entry_file(

@@ -370,7 +370,7 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                     // Spawn cancellable analysis task
                     let analyzer_clone = persistent_analyzer.clone();
                     let files_to_analyze_clone = files_to_analyze.clone();
-                    let show_progress = false; // Disable progress bar in watch mode
+                    let show_progress = true; // Enable progress bar in watch mode to see cache progress
                     let is_watch_mode = true;
                     
                     analysis_task = Some(tokio::spawn(async move {
@@ -379,19 +379,14 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                         
                         // Use the persistent analyzer
                         let mut analyzer = analyzer_clone.lock().await;
-                        match analyzer.analyze_files(&files_to_analyze_clone).await {
+                        match analyzer.analyze_files_incremental(&files_to_analyze_clone).await {
                             Ok((result, num_threads)) => {
                                 let elapsed = start_time.elapsed();
                                 let cache_stats = analyzer.get_incremental_cache_stats(); // Get incremental stats
                                 
                                 // Compact output for watch mode with cache info
                                 let cache_info = if cache_stats.hits > 0 {
-                                    let cache_percentage = if cache_stats.hits + cache_stats.misses > 0 {
-                                        (cache_stats.hits as f64) / ((cache_stats.hits + cache_stats.misses) as f64) * 100.0
-                                    } else {
-                                        0.0
-                                    };
-                                    format!(", {:.0}%💾", cache_percentage)
+                                    format!(", {}💾", cache_stats.hits)
                                 } else {
                                     String::new()
                                 };
@@ -410,10 +405,6 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                                     let console_output = ConsoleOutput::new();
                                     console_output.print_circular(&result.circulars, None);
                                 }
-                                
-                                println!("{} Incremental analysis complete\n", 
-                                    style("✅").bright()
-                                );
                             },
                             Err(e) => {
                                 eprintln!("{} Analysis failed: {}\n", 
