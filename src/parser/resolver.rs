@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use std::path::{Path, PathBuf, MAIN_SEPARATOR};
+use anyhow::{Result};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 pub struct ModuleResolver {

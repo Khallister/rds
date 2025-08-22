@@ -1,4 +1,4 @@
-use console::{style, Style};
+use console::{style};
 use std::collections::HashMap;
 use crate::types::DependencyTree;
 

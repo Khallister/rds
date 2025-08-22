@@ -15,8 +15,4 @@ impl JsonOutput {
         fs::write(path, json).await?;
         Ok(())
     }
-    
-    pub fn to_string(&self, result: &AnalysisResult) -> Result<String> {
-        Ok(serde_json::to_string_pretty(result)?)
-    }
 }

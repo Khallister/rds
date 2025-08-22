@@ -120,11 +120,6 @@ impl FileCache {
         Ok(())
     }
 
-    /// Invalidate cache entry for a specific file
-    pub fn invalidate(&mut self, file_path: &str) {
-        self.cache.remove(file_path);
-    }
-
     /// Clear all cached entries
     pub fn clear(&mut self) {
         self.cache.clear();
@@ -164,16 +159,6 @@ impl FileCache {
         self.misses = 0;
         
         stats
-    }
-
-    /// Get the number of cached files
-    pub fn cached_files_count(&self) -> usize {
-        self.cache.len()
-    }
-
-    /// Check if caching is enabled
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
     }
 
     /// Enable or disable caching

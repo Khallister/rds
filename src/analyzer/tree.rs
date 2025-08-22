@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use crate::types::{DependencyTree, ParseOptions, Dependency, ProgressEvent};
+use crate::types::{DependencyTree, ParseOptions, ProgressEvent};
 use crate::parser::{JavaScriptParser, VueParser, ModuleResolver};
 use crate::cache::{FileCache, CacheStats};
 
@@ -102,7 +102,7 @@ impl TreeBuilder {
     ) -> Result<(DependencyTree, usize)> {
         
         // If we have a previous analysis, try to do incremental update
-        if let Some((last_entries, last_tree)) = &self.last_analysis {
+        if let Some((_, last_tree)) = &self.last_analysis {
             // For now, if the changed file is the only entry file, check if its dependencies changed
             if changed_files.len() == 1 {
                 let changed_file = &changed_files[0];
@@ -387,26 +387,6 @@ impl TreeBuilder {
         }
         
         Ok(())
-    }
-    
-    // Helper method for parsing file content (can be called from parallel context)
-    fn parse_file_content(
-        &self,
-        content: &str,
-        file_path: &str,
-        options: &ParseOptions,
-    ) -> Result<Vec<Dependency>> {
-        let path = Path::new(file_path);
-        let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        
-        let is_vue = options.vue_extensions.iter()
-            .any(|ext| ext.trim_start_matches('.') == extension);
-        
-        if is_vue {
-            self.vue_parser.parse_file(file_path, content)
-        } else {
-            self.js_parser.parse_file(file_path, content)
-        }
     }
     
     fn shorten_tree(&self, context: &Path, tree: DependencyTree) -> Result<DependencyTree> {

@@ -1,5 +1,4 @@
 use crate::types::{DependencyTree, DependencyKind, SkipDynamicImports};
-use std::collections::{HashMap, HashSet};
 
 pub struct CircularAnalyzer;
 

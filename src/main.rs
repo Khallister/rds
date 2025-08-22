@@ -17,7 +17,6 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::analyzer::DependencyAnalyzer;
-use crate::cache::CacheStats;
 use crate::types::{ParseOptions, SkipDynamicImports};
 use crate::output::{ConsoleOutput, JsonOutput};
 
@@ -308,7 +307,7 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
     // Disable progress callback for watch mode
     watch_options.progress_callback = None;
     
-    let mut persistent_analyzer = Arc::new(tokio::sync::Mutex::new(DependencyAnalyzer::new(watch_options)?));
+    let persistent_analyzer = Arc::new(tokio::sync::Mutex::new(DependencyAnalyzer::new(watch_options)?));
     
     // Handle file system events
     const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
@@ -372,8 +371,6 @@ async fn run_watch_mode(cli: &Cli) -> Result<()> {
                     // Spawn cancellable analysis task
                     let analyzer_clone = persistent_analyzer.clone();
                     let files_to_analyze_clone = files_to_analyze.clone();
-                    let show_progress = true; // Enable progress bar in watch mode to see cache progress
-                    let is_watch_mode = true;
                     
                     analysis_task = Some(tokio::spawn(async move {
                         let start_time = Instant::now();
@@ -473,39 +470,6 @@ fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Ve
 
 fn normalize_path_string(path: &str) -> String {
     Path::new(path).to_string_lossy().replace("\\", "/")
-}
-
-fn should_trigger_analysis(event: &Event, watched_files: &[String]) -> bool {
-    match event.kind {
-        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-            // Check if any of the changed paths are relevant
-            for path in &event.paths {
-                let path_str = path.to_string_lossy();
-                
-                // Check if this file matches our watched extensions
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if matches!(ext, "js" | "jsx" | "ts" | "tsx" | "vue" | "mjs" | "json") {
-                        // Skip node_modules and other irrelevant directories
-                        if !path_str.contains("node_modules") 
-                           && !path_str.contains(".git") 
-                           && !path_str.contains("dist")
-                           && !path_str.contains("build") {
-                            return true;
-                        }
-                    }
-                }
-                
-                // Also check if it directly matches any of our target files
-                for watched_file in watched_files {
-                    if path_str.contains(watched_file) || watched_file.contains(path_str.as_ref()) {
-                        return true;
-                    }
-                }
-            }
-        },
-        _ => {}
-    }
-    false
 }
 
 async fn run_analysis_once(cli: &Cli) -> Result<()> {
