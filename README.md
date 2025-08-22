@@ -278,9 +278,30 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Inspired by the original [dpdm](https://github.com/acrazing/dpdm) package
-- Built with the amazing Rust ecosystem
-- Special thanks to the TypeScript team for their compiler API insights
+This project was inspired by and builds upon the excellent work of:
+
+### 🌟 Original DPDM Package
+**RDS** is a Rust-based reimplementation inspired by the fantastic [**dpdm**](https://github.com/acrazing/dpdm) package created by [acrazing](https://github.com/acrazing).
+
+- **Original Repository**: https://github.com/acrazing/dpdm
+- **What we learned**: TypeScript compiler API usage, dependency resolution patterns, and CLI design
+- **Why Rust**: To provide a more memory-efficient alternative while maintaining feature parity
+
+### 🛠️ Technology Stack
+- Built with the amazing **Rust ecosystem**
+- **TypeScript Compiler API insights** from the original implementation
+- **Tokio** for async file processing
+- **Clap** for CLI argument parsing
+- **SWC** for JavaScript/TypeScript parsing
+
+### 🎯 Design Philosophy
+While RDS maintains full feature compatibility with the original dpdm, it focuses on:
+- **Memory efficiency** through Rust's ownership system
+- **Performance** via parallel processing and optimized algorithms  
+- **Enhanced UX** with progress bars, colors, and better error messages
+- **Cross-platform distribution** through npm packaging
+
+**Huge thanks to the original dpdm team for pioneering dependency analysis tooling!** 🙌
 
 ---
 
