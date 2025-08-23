@@ -14,7 +14,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Node deps (dev)
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found, running npm ci"
+            npm ci
+          else
+            echo "package-lock.json not found, running npm install"
+            npm install
+          fi
 
       - name: Check Husky installed
         run: |
