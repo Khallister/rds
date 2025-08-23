@@ -12,8 +12,8 @@ pub mod filesystem;
 pub mod output;
 pub mod parser;
 pub mod types;
-pub mod utils;
 pub mod watch;
+pub mod utils;
 
 pub use analysis_runner::AnalysisRunner;
 pub use analyzer::DependencyAnalyzer;

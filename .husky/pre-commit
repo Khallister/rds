@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Husky pre-commit hook: run lint-staged (which runs formatters on staged files)
+echo "🔧 Running lint-staged..."
+
+if command -v npx >/dev/null 2>&1; then
+  npx lint-staged
+elif command -v pnpm >/dev/null 2>&1; then
+  pnpm -s lint-staged
+elif command -v yarn >/dev/null 2>&1; then
+  yarn -s lint-staged
+else
+  echo "⚠️  lint-staged not available. Install dependencies and run 'npx husky install'" >&2
+  exit 1
+fi
+
+exit 0
