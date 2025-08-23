@@ -4,7 +4,7 @@ export interface User {
   email: string;
   age?: number;
   active: boolean;
-  role: 'admin' | 'user' | 'moderator';
+  role: "admin" | "user" | "moderator";
   createdAt: Date;
   lastLogin?: Date;
 }

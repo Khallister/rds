@@ -1,5 +1,5 @@
-pub mod dependency;
 pub mod config;
+pub mod dependency;
 
-pub use dependency::*;
 pub use config::*;
+pub use dependency::*;

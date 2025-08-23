@@ -1,28 +1,23 @@
 <template>
-  <img 
-    class="avatar" 
-    :src="src" 
-    :alt="alt"
-    @error="handleImageError"
-  />
+  <img class="avatar" :src="src" :alt="alt" @error="handleImageError" />
 </template>
 
 <script>
 export default {
-  name: 'UserAvatar',
+  name: "UserAvatar",
   props: {
     src: String,
     alt: {
       type: String,
-      default: 'User avatar'
-    }
+      default: "User avatar",
+    },
   },
   methods: {
     handleImageError() {
-      console.error('Failed to load avatar image')
-    }
-  }
-}
+      console.error("Failed to load avatar image");
+    },
+  },
+};
 </script>
 
 <style scoped>

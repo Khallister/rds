@@ -1,5 +1,5 @@
 // Re-export all types from individual files
-export * from './user';
+export * from "./user";
 
 // Additional common types
 export interface ComponentProps {
@@ -7,7 +7,7 @@ export interface ComponentProps {
   children?: React.ReactNode;
 }
 
-export type Theme = 'light' | 'dark' | 'auto';
+export type Theme = "light" | "dark" | "auto";
 
 export interface AppConfig {
   theme: Theme;

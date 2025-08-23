@@ -24,8 +24,7 @@ export const Button: React.FC<ButtonProps> = ({
   
   const handleClick = () => {
     if (!disabled && onClick) {
-      // Validate any text content for security
-      if (typeof children === 'string') {
+          if (typeof children === 'string') {
         const sanitized = validateInput(children);
         console.log(`Button clicked: ${sanitized}`);
       }
