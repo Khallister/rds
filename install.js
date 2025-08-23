@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 // For future GitHub releases download functionality
 // const https = require('https');
 // const { execSync } = require('child_process');
@@ -11,61 +11,63 @@ const path = require('path');
 function getPlatformInfo() {
   const platform = process.platform;
   const arch = process.arch;
-  
-    const platformMap = {
-    'win32': 'windows',
-    'darwin': 'macos', 
-    'linux': 'linux'
+
+  const platformMap = {
+    win32: "windows",
+    darwin: "macos",
+    linux: "linux",
   };
-  
+
   const archMap = {
-    'x64': 'x64',
-    'arm64': 'arm64'
+    x64: "x64",
+    arm64: "arm64",
   };
-  
+
   return {
     platform: platformMap[platform] || platform,
     arch: archMap[arch] || arch,
-    ext: platform === 'win32' ? '.exe' : ''
+    ext: platform === "win32" ? ".exe" : "",
   };
 }
 
 function downloadBinary() {
   const { platform, arch, ext } = getPlatformInfo();
   const binaryName = `rds${ext}`;
-  const binDir = path.join(__dirname, 'bin');
+  const binDir = path.join(__dirname, "bin");
   const binaryPath = path.join(binDir, binaryName);
-  
-    if (!fs.existsSync(binDir)) {
+
+  if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
-  
-  const localBinary = path.join(__dirname, 'target', 'release', binaryName);
+
+  const localBinary = path.join(__dirname, "target", "release", binaryName);
   if (fs.existsSync(localBinary)) {
-    console.log('📦 Using local binary...');
+    console.log("📦 Using local binary...");
     fs.copyFileSync(localBinary, binaryPath);
-    
-      if (process.platform !== 'win32') {
+
+    if (process.platform !== "win32") {
       fs.chmodSync(binaryPath, 0o755);
     }
-    
-    console.log('✅ RDS binary installed successfully!');
+
+    console.log("✅ RDS binary installed successfully!");
     return;
   }
-  
+
   // TODO: In a full implementation, download from GitHub releases
-  console.log(`📥 Would download binary for ${platform}-${arch} from GitHub releases`);
-  console.log('⚠️  For now, please build locally with: cargo build --release');
-  console.log('    Then copy target/release/rds to bin/rds');
+  console.log(
+    `📥 Would download binary for ${platform}-${arch} from GitHub releases`,
+  );
+  console.log("⚠️  For now, please build locally with: cargo build --release");
+  console.log("    Then copy target/release/rds to bin/rds");
 }
 
 function main() {
-  console.log('🚀 Installing RDS binary...');
-  
+  console.log("🚀 Installing RDS binary...");
+
   try {
     downloadBinary();
   } catch (error) {
-    console.error('❌ Installation failed:', error.message);
+    console.error("❌ Installation failed:", error.message);
     process.exit(1);
   }
 }

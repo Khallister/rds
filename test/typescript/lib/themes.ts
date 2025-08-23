@@ -10,41 +10,41 @@ interface ButtonTheme {
 
 export function createButtonTheme(variant: string): ButtonTheme {
   switch (variant) {
-    case 'primary':
+    case "primary":
       return {
-        className: 'btn-theme-primary',
+        className: "btn-theme-primary",
         style: {
-          backgroundColor: '#007bff',
-          color: 'white',
-          border: '1px solid #007bff'
-        }
+          backgroundColor: "#007bff",
+          color: "white",
+          border: "1px solid #007bff",
+        },
       };
-    case 'secondary':
+    case "secondary":
       return {
-        className: 'btn-theme-secondary',
+        className: "btn-theme-secondary",
         style: {
-          backgroundColor: '#6c757d',
-          color: 'white',
-          border: '1px solid #6c757d'
-        }
+          backgroundColor: "#6c757d",
+          color: "white",
+          border: "1px solid #6c757d",
+        },
       };
-    case 'danger':
+    case "danger":
       return {
-        className: 'btn-theme-danger',
+        className: "btn-theme-danger",
         style: {
-          backgroundColor: '#dc3545',
-          color: 'white',
-          border: '1px solid #dc3545'
-        }
+          backgroundColor: "#dc3545",
+          color: "white",
+          border: "1px solid #dc3545",
+        },
       };
     default:
       return {
-        className: 'btn-theme-default',
+        className: "btn-theme-default",
         style: {
-          backgroundColor: '#f8f9fa',
-          color: '#212529',
-          border: '1px solid #dee2e6'
-        }
+          backgroundColor: "#f8f9fa",
+          color: "#212529",
+          border: "1px solid #dee2e6",
+        },
       };
   }
 }

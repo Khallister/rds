@@ -7,18 +7,18 @@
 </template>
 
 <script>
-import UserAvatar from './UserAvatar.vue'
+import UserAvatar from "./UserAvatar.vue";
 
 export default {
-  name: 'UserProfile',
+  name: "UserProfile",
   components: {
-    UserAvatar
+    UserAvatar,
   },
   props: {
     user: {
       type: Object,
-      required: true
-    }
-  }
-}
+      required: true,
+    },
+  },
+};
 </script>

@@ -1,6 +1,6 @@
 //! Analysis orchestration and execution logic.
 //!
-//! This module handles the coordination of dependency analysis, including 
+//! This module handles the coordination of dependency analysis, including
 //! progress reporting, result processing, and output generation.
 
 use anyhow::Result;
@@ -19,33 +19,33 @@ use crate::utils::{config, exit_codes};
 pub struct AnalysisRunner;
 
 impl AnalysisRunner {
-        pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
-        let show_progress = cli.progress.unwrap_or_else(|| {
-            atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err()
-        });
+    pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
+        let show_progress = cli
+            .progress
+            .unwrap_or_else(|| atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err());
 
-                let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
+        let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
         if expanded_files.is_empty() {
             eprintln!("No files found matching the specified criteria");
             return Ok(());
         }
 
-                let mut options = config::create_parse_options_from_cli(cli)?;
-        
-                let progress_bar = if show_progress {
+        let mut options = config::create_parse_options_from_cli(cli)?;
+
+        let progress_bar = if show_progress {
             let pb = ProgressBar::new(expanded_files.len() as u64);
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("  [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
                     .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏  ")
+                    .progress_chars("█▉▊▋▌▍▎▏  "),
             );
             Some(pb)
         } else {
             None
         };
-        
-                if let Some(ref pb) = progress_bar {
+
+        if let Some(ref pb) = progress_bar {
             let pb_clone = pb.clone();
             options.progress_callback = Some(Box::new(move |_, msg| {
                 pb_clone.set_message(msg.to_string());
@@ -53,41 +53,57 @@ impl AnalysisRunner {
             }));
         }
 
-                let mut analyzer = DependencyAnalyzer::new(options)?;
+        let mut analyzer = DependencyAnalyzer::new(options)?;
 
-                let start_time = Instant::now();
+        let start_time = Instant::now();
         if show_progress {
-            println!("{}", style("🚀 Starting dependency analysis...").bold().green());
+            println!(
+                "{}",
+                style("🚀 Starting dependency analysis...").bold().green()
+            );
         }
 
-    let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
+        let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
 
         let cache_stats = analyzer.get_cache_stats();
 
-    let duration = start_time.elapsed();
-        
-                if let Some(pb) = progress_bar {
+        let duration = start_time.elapsed();
+
+        if let Some(pb) = progress_bar {
             pb.finish_with_message("Complete!");
         }
 
-                println!("🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
-            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
+        println!(
+            "🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
+            cache_stats.hits,
+            cache_stats.misses,
+            cache_stats.cached_files,
+            cache_stats.cached_tree_reuses,
+            cache_stats.hit_rate
+        );
 
-               Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli).await?;
-        
-                if cli.throw && !result.circulars.is_empty() {
-                                              eprintln!("{}", style("error: Circular Dependencies found").bold().red());
-            eprintln!("  {} circular dependencies detected.", result.circulars.len());
+        Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli)
+            .await?;
+
+        if cli.throw && !result.circulars.is_empty() {
+            eprintln!(
+                "{}",
+                style("error: Circular Dependencies found").bold().red()
+            );
+            eprintln!(
+                "  {} circular dependencies detected.",
+                result.circulars.len()
+            );
             std::process::exit(1);
         }
-        
+
         if let Some(ref exit_spec) = cli.exit_code {
             exit_codes::handle_exit_codes(exit_spec, &result.circulars)?;
         }
 
         Ok(())
     }
-    
+
     /// Display analysis results using appropriate output methods
     async fn display_analysis_results(
         result: &AnalysisResult,
@@ -97,19 +113,24 @@ impl AnalysisRunner {
         cli: &Cli,
     ) -> Result<()> {
         let console_output = ConsoleOutput::new();
-        
-                println!("{} {:.2?})", 
+
+        println!(
+            "{} {:.2?})",
             style("✨ Analysis complete!").bold().green(),
             duration
         );
-        println!("📊 {} files processed, {} total dependencies in tree",
+        println!(
+            "📊 {} files processed, {} total dependencies in tree",
             expanded_files.len(),
             Self::count_total_dependencies(&result.tree)
         );
-        println!("🧵 Analysis used {} threads for parallel processing", num_threads);
+        println!(
+            "🧵 Analysis used {} threads for parallel processing",
+            num_threads
+        );
         println!();
 
-                let show_tree = cli.tree || (!cli.circular && !cli.tree);
+        let show_tree = cli.tree || (!cli.circular && !cli.tree);
         let show_circular = cli.circular || (!cli.circular && !cli.tree);
 
         if show_tree {
@@ -118,10 +139,10 @@ impl AnalysisRunner {
 
         if show_circular {
             let console_output = ConsoleOutput::new();
-                        console_output.print_circular(&result.circulars, cli.take, None);
+            console_output.print_circular(&result.circulars, cli.take, None);
         }
 
-                if let Some(ref output_path) = cli.output {
+        if let Some(ref output_path) = cli.output {
             let json_output = JsonOutput::new();
             json_output.write_to_file(result, output_path).await?;
             println!("📄 Results saved to: {}", output_path.display());
@@ -129,9 +150,8 @@ impl AnalysisRunner {
 
         Ok(())
     }
-    
-       
-        fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
+
+    fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
         tree.values()
             .filter_map(|deps| deps.as_ref())
             .map(|deps| deps.len())
@@ -149,13 +169,13 @@ mod tests {
         let mut tree = DependencyTree::new();
         tree.insert("file1.js".to_string(), Some(vec![]));
         tree.insert("file2.js".to_string(), None);
-        
+
         assert_eq!(AnalysisRunner::count_total_dependencies(&tree), 0);
     }
-    
+
     #[test]
     fn test_print_circular_dependencies_empty() {
-       let out = ConsoleOutput::new();
-    out.print_circular(&[], None, None);
+        let out = ConsoleOutput::new();
+        out.print_circular(&[], None, None);
     }
 }

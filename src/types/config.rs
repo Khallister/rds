@@ -73,7 +73,10 @@ impl Default for ParseOptions {
             ],
             vue_extensions: vec![".vue".to_string()],
             include: Regex::new(".*").unwrap(),
-            exclude: Regex::new(r"node_modules|\.git|\.svn|\.hg|coverage|dist|build|out|\.next|\.nuxt").unwrap(),
+            exclude: Regex::new(
+                r"node_modules|\.git|\.svn|\.hg|coverage|dist|build|out|\.next|\.nuxt",
+            )
+            .unwrap(),
             dependency_exclude: Regex::new(r"node_modules|\.git|\.svn|\.hg").unwrap(),
             tsconfig: None,
             transform: false,

@@ -1,4 +1,4 @@
-use crate::types::{DependencyTree, DependencyKind, SkipDynamicImports};
+use crate::types::{DependencyKind, DependencyTree, SkipDynamicImports};
 use std::collections::HashSet;
 
 pub struct CircularAnalyzer;
@@ -7,7 +7,7 @@ impl CircularAnalyzer {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub fn find_circular_dependencies(
         &self,
         tree: &DependencyTree,
@@ -17,10 +17,10 @@ impl CircularAnalyzer {
         let mut circulars = Vec::new();
         let tree_copy = tree.clone();
 
-              let mut seen_cycles: HashSet<String> = HashSet::new();
+        let mut seen_cycles: HashSet<String> = HashSet::new();
 
-              for id in tree.keys() {
-                      if let Some(max) = max_count {
+        for id in tree.keys() {
+            if let Some(max) = max_count {
                 if circulars.len() >= max {
                     break;
                 }
@@ -41,7 +41,7 @@ impl CircularAnalyzer {
 
         circulars
     }
-    
+
     fn visit_node(
         &self,
         id: String,
@@ -52,21 +52,21 @@ impl CircularAnalyzer {
         max_count: Option<usize>,
         seen_cycles: &mut HashSet<String>,
     ) {
-              if let Some(max) = max_count {
+        if let Some(max) = max_count {
             if circulars.len() >= max {
                 return;
             }
         }
-        
-              if let Some(index) = path.iter().position(|x| x == &id) {
-                      let mut circular = path[index..].to_vec();
 
-                                          fn canonicalize(mut cyc: Vec<String>) -> Vec<String> {
+        if let Some(index) = path.iter().position(|x| x == &id) {
+            let mut circular = path[index..].to_vec();
+
+            fn canonicalize(mut cyc: Vec<String>) -> Vec<String> {
                 if cyc.is_empty() {
                     return cyc;
                 }
 
-                              let rotations = |v: &Vec<String>| {
+                let rotations = |v: &Vec<String>| {
                     let len = v.len();
                     let mut best = None::<(String, Vec<String>)>;
                     for i in 0..len {
@@ -85,7 +85,7 @@ impl CircularAnalyzer {
                 cyc.reverse();
                 let backward = rotations(&cyc);
 
-                              if forward.join("->") <= backward.join("->") {
+                if forward.join("->") <= backward.join("->") {
                     forward
                 } else {
                     backward
@@ -101,27 +101,28 @@ impl CircularAnalyzer {
 
             return;
         }
-        
-              if !tree.contains_key(&id) {
+
+        if !tree.contains_key(&id) {
             return;
         }
 
-              if let Some(Some(dependencies)) = tree.get(&id).cloned() {
+        if let Some(Some(dependencies)) = tree.get(&id).cloned() {
             path.push(id.clone());
 
             for dep in dependencies {
-                              if let Some(max) = max_count {
+                if let Some(max) = max_count {
                     if circulars.len() >= max {
                         break;
                     }
                 }
-                
+
                 if let Some(dep_id) = &dep.id {
-                                      if *skip_dynamic_imports == SkipDynamicImports::Circular 
-                        && dep.kind == DependencyKind::DynamicImport {
+                    if *skip_dynamic_imports == SkipDynamicImports::Circular
+                        && dep.kind == DependencyKind::DynamicImport
+                    {
                         continue;
                     }
-                    
+
                     self.visit_node(
                         dep_id.clone(),
                         path.clone(),

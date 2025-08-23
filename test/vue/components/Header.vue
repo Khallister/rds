@@ -6,14 +6,14 @@
 
 <script>
 export default {
-  name: 'Header',
+  name: "Header",
   props: {
     title: {
       type: String,
-      required: true
-    }
-  }
-}
+      required: true,
+    },
+  },
+};
 </script>
 
 <style scoped>
