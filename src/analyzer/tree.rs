@@ -90,7 +90,7 @@ impl TreeBuilder {
         // Configure cache based on options
         self.cache.set_enabled(options.cache_enabled);
 
-    eprintln!("[tree] build_dependency_tree called with entries={:?} context='{}' cache_enabled={}", entries, options.context.to_string_lossy(), options.cache_enabled);
+    // debug logging removed for cleaner watch output
         
         let mut tree = DependencyTree::new();
         
@@ -130,7 +130,7 @@ impl TreeBuilder {
             }
         }
 
-    eprintln!("[tree] expanded all_files={:?}", all_files);
+    // debug logging removed for cleaner watch output
 
         // Multi-threaded recursive dependency parsing
         // Process dependencies in parallel batches, recursively discovering new dependencies
@@ -375,7 +375,7 @@ impl TreeBuilder {
         // Configure cache based on options
         self.cache.set_enabled(options.cache_enabled);
 
-    eprintln!("[tree] build_dependency_tree_incremental called with changed_files={:?} cache_enabled={}", changed_files, options.cache_enabled);
+    // debug logging removed for cleaner watch output
         
         // Get number of available threads
         let num_threads = rayon::current_num_threads();
@@ -384,16 +384,14 @@ impl TreeBuilder {
         if options.cache_enabled && changed_files.len() == 1 {
             let changed_file = &changed_files[0];
 
-            eprintln!("[tree] single changed_file='{}'", changed_file);
+            // single-file changed (watch mode)
             
             // If we have a previous analysis, compare the file's dependencies to see if anything meaningful changed
             if let Some((cached_file, cached_tree)) = self.last_analysis_cache.clone() {
                 // Normalize the changed file key for comparison with cached key
                 let normalized_changed_file = self.normalize_path_for_storage(changed_file);
-                eprintln!("[tree] last_analysis_cache present: cached_file='{}' normalized_changed_file='{}'", cached_file, normalized_changed_file);
-
                 if cached_file == normalized_changed_file {
-                    eprintln!("[tree] changed_file matches cached normalized key -> attempting single-file parse comparison");
+                    // changed_file matches cached key -> attempting single-file parse comparison
                     // Parse just the changed file to get its current dependencies (without recursion)
                     let mut temp_tree = DependencyTree::new();
                     self.parse_single_file_deps(changed_file, options, &mut temp_tree).await?;

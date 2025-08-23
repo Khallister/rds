@@ -88,6 +88,11 @@ impl AnalysisRunner {
         
         // Handle exit codes
         if cli.throw && !result.circulars.is_empty() {
+            // Print a clear, styled error message before exiting so users running
+            // the binary directly (or CI) see a helpful message instead of only
+            // the generic process exit text.
+            eprintln!("{}", style("error: Circular Dependencies found").bold().red());
+            eprintln!("  {} circular dependencies detected.", result.circulars.len());
             std::process::exit(1);
         }
         
@@ -129,7 +134,9 @@ impl AnalysisRunner {
         }
 
         if show_circular {
-            Self::print_circular_dependencies(&result.circulars, cli.take);
+            let console_output = ConsoleOutput::new();
+            // Use full listing in non-watch mode (no max_entries)
+            console_output.print_circular(&result.circulars, cli.take, None);
         }
 
         // Save to JSON if requested
@@ -142,34 +149,7 @@ impl AnalysisRunner {
         Ok(())
     }
     
-    /// Print circular dependencies in a user-friendly format
-    fn print_circular_dependencies(circulars: &[Vec<String>], take_limit: Option<usize>) {
-        if circulars.is_empty() {
-            println!("{}", style("🔄 Circular Dependencies").bold().cyan());
-            println!("  {} {}", 
-                style("✅").green(),
-                style("Congratulations, no circular dependency was found in your project.").green()
-            );
-        } else {
-            println!("{}", style("⚠️  Circular Dependencies").bold().yellow());
-            for (i, circular) in circulars.iter().enumerate() {
-                println!("  {}) {}", 
-                    style(i + 1).bold(),
-                    circular.join(" → ")
-                );
-            }
-            
-            if let Some(limit) = take_limit {
-                if circulars.len() >= limit {
-                    println!("  {} {} (search limit reached)",
-                        style("At least").dim(),
-                        style(format!("{} circular dependencies found", limit)).bold()
-                    );
-                }
-            }
-        }
-        println!();
-    }
+    // Delegated to `ConsoleOutput::print_circular`.
     
     /// Count total dependencies in the dependency tree
     fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
@@ -196,7 +176,8 @@ mod tests {
     
     #[test]
     fn test_print_circular_dependencies_empty() {
-        // This test mainly ensures the function doesn't panic
-        AnalysisRunner::print_circular_dependencies(&[], None);
+    // This test mainly ensures the function doesn't panic
+    let out = ConsoleOutput::new();
+    out.print_circular(&[], None, None);
     }
 }

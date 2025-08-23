@@ -94,45 +94,60 @@ impl ConsoleOutput {
         }
     }
     
-    pub fn print_circular(&self, circulars: &[Vec<String>], take_limit: Option<usize>) {
+    /// Print circular dependencies using the shared, styled output.
+    ///
+    /// `take_limit` preserves the old semantics of showing a message when the
+    /// analyzer hit its search limit. `max_entries` can be used by callers
+    /// (like watch mode) to limit the number of cycles printed (e.g. 3).
+    pub fn print_circular(&self, circulars: &[Vec<String>], take_limit: Option<usize>, max_entries: Option<usize>) {
         let header = if circulars.is_empty() {
             style("🔄 Circular Dependencies").bold().green()
         } else {
             style("⚠️  Circular Dependencies").bold().red()
         };
-        
+
         println!("{}", header);
-        
+
         if circulars.is_empty() {
-            println!("  {}", 
-                style("✅ Congratulations, no circular dependency was found in your project.")
-                    .bold().green()
+            println!("  {} {}", 
+                style("✅").green(),
+                style("Congratulations, no circular dependency was found in your project.").green()
             );
         } else {
             let digits = circulars.len().to_string().len();
-            for (i, circular) in circulars.iter().enumerate() {
-                let line = format!("  {:0width$}) {}", 
-                    i + 1, 
-                    circular.iter()
-                        .map(|s| style(s).red().to_string())
-                        .collect::<Vec<_>>()
-                        .join(&style(" -> ").dim().to_string()),
-                    width = digits
-                );
-                println!("{}", style(line).dim());
+            let to_show = max_entries.unwrap_or(circulars.len());
+
+            for (i, circular) in circulars.iter().enumerate().take(to_show) {
+                // Print index
+                print!("  {:0width$}) ", i + 1, width = digits);
+
+                // Print each segment styled (bold red) and dim arrows between
+                for (j, seg) in circular.iter().enumerate() {
+                    print!("{}", style(seg).red().bold());
+                    if j != circular.len() - 1 {
+                        // Use a nicer unicode arrow and dim it
+                        print!("{}", style(" → ").dim());
+                    }
+                }
+
+                println!();
             }
-            
+
+            if circulars.len() > to_show {
+                println!("  ... and {} more", circulars.len() - to_show);
+            }
+
             // Show "at least N" message if we hit the take limit
             if let Some(limit) = take_limit {
                 if circulars.len() >= limit {
-                    println!("  {}", 
-                        style(format!("At least {} circular dependencies found (search limit reached)", limit))
-                            .bold().yellow()
+                    println!("  {} {} (search limit reached)",
+                        style("At least").dim(),
+                        style(format!("{} circular dependencies found", limit)).bold()
                     );
                 }
             }
         }
-        
+
         println!();
     }
     

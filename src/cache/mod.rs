@@ -5,7 +5,6 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use crate::types::Dependency;
 
-/// Represents a cached file entry with its dependencies and metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheEntry {
     /// File path (absolute)
@@ -46,17 +45,12 @@ impl FileCache {
         }
     }
 
-    /// Check if a file is cached and up-to-date
-    /// Check if a file is cached and up-to-date.
-    /// `fs_path` is the actual filesystem path used to read metadata.
-    /// `cache_key` is the storage-normalized key used to index the internal cache map.
     pub async fn is_cached(&mut self, fs_path: &str, cache_key: &str) -> Result<bool> {
         if !self.enabled {
             return Ok(false);
         }
 
-        // Debug: show lookup attempt
-        eprintln!("[cache] is_cached lookup -> cache_key='{}' fs_path='{}' enabled={}", cache_key, fs_path, self.enabled);
+    // Debug logging removed for cleaner output
 
         let path = Path::new(fs_path);
         if !path.exists() {
@@ -71,13 +65,13 @@ impl FileCache {
 
         // Check if we have this file in cache using cache_key
         if let Some(entry) = self.cache.get(cache_key) {
-            eprintln!("[cache] is_cached: found entry for key='{}' (cached_file='{}')", cache_key, entry.file_path);
+            // entry found in cache
             // Check if the cached entry is still valid
             if entry.modified_time == modified_time && entry.file_size == file_size {
-                eprintln!("[cache] is_cached: entry valid (mtime and size match)");
+                // entry valid
                 return Ok(true);
             } else {
-                eprintln!("[cache] is_cached: entry invalid, removing from cache (mtime or size changed)");
+                // entry invalid - removing from cache
                 // File has changed, remove from cache
                 self.cache.remove(cache_key);
             }
@@ -93,14 +87,12 @@ impl FileCache {
             return None;
         }
 
-        eprintln!("[cache] get_cached_dependencies lookup -> cache_key='{}'", cache_key);
+        // Lookup cached dependencies
         if let Some(entry) = self.cache.get(cache_key) {
             self.hits += 1;
-            eprintln!("[cache] get_cached_dependencies: hit for key='{}' (file='{}')", cache_key, entry.file_path);
             Some(entry.dependencies.clone())
         } else {
             self.misses += 1;
-            eprintln!("[cache] get_cached_dependencies: miss for key='{}'", cache_key);
             None
         }
     }
@@ -113,7 +105,7 @@ impl FileCache {
             return Ok(());
         }
 
-        eprintln!("[cache] cache_dependencies store -> cache_key='{}' fs_path='{}'", cache_key, fs_path);
+    // quiet: removed verbose store log
 
         let path = Path::new(fs_path);
         if !path.exists() {
@@ -138,7 +130,7 @@ impl FileCache {
             file_size,
         };
 
-    eprintln!("[cache] cache_dependencies: inserting entry for key='{}' (file='{}')", cache_key, fs_path);
+    // insert cache entry
     self.cache.insert(cache_key.to_string(), entry);
         Ok(())
     }

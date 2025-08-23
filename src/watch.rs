@@ -172,7 +172,10 @@ impl WatchRunner {
         
         let duration = start_time.elapsed();
         
-        // Compact output for watch mode
+        // Compact output for watch mode - clear previous block and print fresh stats
+        // Use ANSI clear sequence; modern Windows terminals support ANSI. If not supported,
+        // this will be a no-op in many consoles.
+        print!("\x1b[2J\x1b[H");
         println!("  📊 {} files, {} deps ({:.2?}, {} threads)",
             changed_files.len(),
             Self::count_total_dependencies(&result.tree),
@@ -180,7 +183,7 @@ impl WatchRunner {
             num_threads
         );
 
-        // Print incremental cache stats
+        // Print incremental cache stats (single block)
         println!("  🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
             cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
         
@@ -188,7 +191,9 @@ impl WatchRunner {
         let show_circular = cli.circular || (!cli.circular && !cli.tree);
         
         if show_circular {
-            Self::print_circular_dependencies_compact(&result.circulars, cli.take);
+            let console_output = ConsoleOutput::new();
+            // In watch mode limit to a small number of cycles for brevity
+            console_output.print_circular(&result.circulars, cli.take, Some(3));
         }
         
         if cli.tree {
@@ -201,37 +206,7 @@ impl WatchRunner {
         Ok(())
     }
     
-    /// Print circular dependencies in compact format for watch mode
-    fn print_circular_dependencies_compact(circulars: &[Vec<String>], take_limit: Option<usize>) {
-        if circulars.is_empty() {
-            println!("{}", style("🔄 Circular Dependencies").bold().cyan());
-            println!("  {} {}", 
-                style("✅").green(),
-                style("No circular dependencies found.").green()
-            );
-        } else {
-            println!("{}", style("⚠️  Circular Dependencies").bold().yellow());
-            for (i, circular) in circulars.iter().enumerate().take(3) { // Limit to first 3 in watch mode
-                println!("  {}) {}", 
-                    style(i + 1).bold(),
-                    circular.join(" → ")
-                );
-            }
-            
-            if circulars.len() > 3 {
-                println!("  ... and {} more", circulars.len() - 3);
-            }
-            
-            if let Some(limit) = take_limit {
-                if circulars.len() >= limit {
-                    println!("  {} {} (search limit reached)",
-                        style("At least").dim(),
-                        style(format!("{} circular dependencies found", limit)).bold()
-                    );
-                }
-            }
-        }
-    }
+    // Delegated to `ConsoleOutput::print_circular` (with a max entries hint).
     
     /// Count total dependencies in the dependency tree
     fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
@@ -259,6 +234,7 @@ mod tests {
     #[test]
     fn test_print_circular_dependencies_compact() {
         // This test mainly ensures the function doesn't panic
-        WatchRunner::print_circular_dependencies_compact(&[], None);
+    let out = ConsoleOutput::new();
+    out.print_circular(&[], None, Some(3));
     }
 }
