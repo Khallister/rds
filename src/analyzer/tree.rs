@@ -16,28 +16,59 @@ pub struct TreeBuilder {
 impl TreeBuilder {
     /// Convert absolute path to relative path for consistent storage
     fn normalize_path_for_storage(&self, path: &str) -> String {
-        let path_obj = std::path::Path::new(path).to_path_buf();
+        use crate::utils::lexical_normalize_abs;
+    // no additional imports
+
+        let path_obj = std::path::Path::new(path);
         let workdir = std::env::current_dir().unwrap_or_default();
-        
-        // If the path is absolute, try to make it relative to current working directory
-        if path_obj.is_absolute() {
-            if let Ok(relative) = path_obj.strip_prefix(&workdir) {
-                relative.to_string_lossy().replace('\\', "/")
+
+        // Prefer to canonicalize to a real absolute path; if that fails, fall back to lexical normalization
+        let abs = if path_obj.is_absolute() {
+            std::fs::canonicalize(path_obj).unwrap_or_else(|_| lexical_normalize_abs(path_obj))
+        } else {
+            let joined = workdir.join(path_obj);
+            std::fs::canonicalize(&joined).unwrap_or_else(|_| lexical_normalize_abs(&joined))
+        };
+
+        // Canonicalize workdir similarly so comparisons are consistent
+        let workdir_abs = std::fs::canonicalize(&workdir).unwrap_or_else(|_| workdir.clone());
+
+        // Helper to strip Windows long-path device prefix like "\\?\" or "//?/"
+        fn strip_device_prefix(s: &str) -> &str {
+            // Several representations may appear; check and strip common prefixes
+            if let Some(rest) = s.strip_prefix("\\\\?\\") {
+                rest
+            } else if let Some(rest) = s.strip_prefix("//?/") {
+                rest
+            } else if let Some(rest) = s.strip_prefix("\\\\?/") {
+                rest
             } else {
-                // For paths outside workdir, try to find common parent with workdir
-                let path_str = path_obj.to_string_lossy().to_lowercase();
-                if path_str.starts_with("c:\\projects\\") || path_str.starts_with("c:/projects/") {
-                    // Get the projects-relative portion
-                    let after_projects = &path_obj.to_string_lossy()[12..]; // Skip "C:\Projects\"
-                    format!("../../{}", after_projects.replace('\\', "/"))
-                } else {
-                    // Fallback: use absolute path but normalize separators
-                    path_obj.to_string_lossy().replace('\\', "/")
+                s
+            }
+        }
+
+        let abs_s = abs.to_string_lossy();
+        let work_s = workdir_abs.to_string_lossy();
+        let abs_stripped = strip_device_prefix(&abs_s).replace('\\', "/");
+        let work_stripped = strip_device_prefix(&work_s).replace('\\', "/");
+
+        // If the path is within the working directory, return a relative path
+        if abs_stripped.starts_with(&format!("{}", work_stripped)) {
+            // Trim leading workdir + optional slash
+            let rel = abs_stripped[work_stripped.len()..].trim_start_matches('/').to_string();
+            return rel;
+        } else {
+            // Prefer projects-relative when under C:/Projects
+            let lower = abs_stripped.to_lowercase();
+            if lower.contains("c:/projects/") {
+                if let Some(idx) = lower.find("c:/projects/") {
+                    let after = &abs_stripped[idx + "c:/projects/".len()..];
+                    return format!("../../{}", after.trim_start_matches('/'));
                 }
             }
-        } else {
-            // Already relative, just normalize separators
-            path_obj.to_string_lossy().replace('\\', "/")
+
+            // Fallback: use the absolute, stripped, normalized path
+            abs_stripped
         }
     }
 
@@ -357,31 +388,29 @@ impl TreeBuilder {
             
             // If we have a previous analysis, compare the file's dependencies to see if anything meaningful changed
             if let Some((cached_file, cached_tree)) = self.last_analysis_cache.clone() {
-                eprintln!("[tree] last_analysis_cache present: cached_file='{}'", cached_file);
-                if &cached_file == changed_file {
-                    eprintln!("[tree] changed_file equals cached_file -> attempting single-file parse comparison");
+                // Normalize the changed file key for comparison with cached key
+                let normalized_changed_file = self.normalize_path_for_storage(changed_file);
+                eprintln!("[tree] last_analysis_cache present: cached_file='{}' normalized_changed_file='{}'", cached_file, normalized_changed_file);
+
+                if cached_file == normalized_changed_file {
+                    eprintln!("[tree] changed_file matches cached normalized key -> attempting single-file parse comparison");
                     // Parse just the changed file to get its current dependencies (without recursion)
                     let mut temp_tree = DependencyTree::new();
                     self.parse_single_file_deps(changed_file, options, &mut temp_tree).await?;
-                    
-                    // Use normalized path to get dependencies from temp tree
-                    let normalized_changed_file = self.normalize_path_for_storage(changed_file);
-                    
+
                     // Compare current dependencies with cached ones
                     if let Some(Some(new_deps)) = temp_tree.get(&normalized_changed_file) {
-                        // Use the same normalization method for cache lookup to ensure consistency
-                        let lookup_path = self.normalize_path_for_storage(changed_file);
-                        
-                        if let Some(Some(old_deps)) = cached_tree.get(&lookup_path) {
+                        if let Some(Some(old_deps)) = cached_tree.get(&normalized_changed_file) {
                             // Compare dependency requests (import paths)
                             let old_requests: std::collections::HashSet<&str> = 
                                 old_deps.iter().map(|d| d.request.as_str()).collect();
                             let new_requests: std::collections::HashSet<&str> = 
                                 new_deps.iter().map(|d| d.request.as_str()).collect();
-                            
+
                             if old_requests == new_requests {
                                 // Dependencies haven't changed! Return cached tree immediately
-                                // This is the key optimization - no full tree rebuild needed
+                                // Count this reuse so the UI can report it
+                                self.cache.incr_cached_tree_reuse();
                                 return Ok((cached_tree, num_threads));
                             }
                         }
@@ -400,9 +429,10 @@ impl TreeBuilder {
         // Use resolve_dependencies to ensure all dependency IDs are resolved
         self.resolve_dependencies(&mut tree, options).await?;
         
-        // Cache this result for future incremental updates
+        // Cache this result for future incremental updates (store normalized key)
         if changed_files.len() == 1 {
-            self.last_analysis_cache = Some((changed_files[0].clone(), tree.clone()));
+            let key = self.normalize_path_for_storage(&changed_files[0]);
+            self.last_analysis_cache = Some((key, tree.clone()));
         }
         
         Ok((tree, threads))

@@ -80,8 +80,8 @@ impl AnalysisRunner {
         }
 
         // Print cache statistics summary
-        println!("🗄️  Cache: {} hits, {} misses, {} files cached (hit rate {:.1}%)",
-            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.hit_rate);
+        println!("🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
+            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
 
         // Display results
         Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli).await?;

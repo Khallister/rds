@@ -10,7 +10,7 @@ use std::fs as std_fs;
 /// Lexically normalize a path by resolving `.` and `..` components without
 /// performing filesystem I/O. Returns an absolute PathBuf by prepending the
 /// current working directory if the input path is relative.
-fn lexical_normalize_abs(path: &Path) -> PathBuf {
+pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
     let mut base = if path.is_absolute() {
         PathBuf::new()
     } else {

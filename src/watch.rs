@@ -181,8 +181,8 @@ impl WatchRunner {
         );
 
         // Print incremental cache stats
-        println!("  🗄️  Cache: {} hits, {} misses, {} files cached (hit rate {:.1}%)",
-            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.hit_rate);
+        println!("  🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
+            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
         
         // Show appropriate analysis results based on CLI flags  
         let show_circular = cli.circular || (!cli.circular && !cli.tree);

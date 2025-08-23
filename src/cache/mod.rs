@@ -30,6 +30,8 @@ pub struct FileCache {
     /// Cache hit statistics
     hits: usize,
     misses: usize,
+    /// Number of times a cached tree/result was reused (incremented by caller)
+    cached_tree_reuses: usize,
 }
 
 impl FileCache {
@@ -40,6 +42,7 @@ impl FileCache {
             enabled,
             hits: 0,
             misses: 0,
+            cached_tree_reuses: 0,
         }
     }
 
@@ -153,6 +156,7 @@ impl FileCache {
             hits: self.hits,
             misses: self.misses,
             cached_files: self.cache.len(),
+            cached_tree_reuses: self.cached_tree_reuses,
             hit_rate: if self.hits + self.misses > 0 {
                 (self.hits as f64) / ((self.hits + self.misses) as f64) * 100.0
             } else {
@@ -167,6 +171,7 @@ impl FileCache {
             hits: self.hits,
             misses: self.misses,
             cached_files: self.cache.len(),
+            cached_tree_reuses: self.cached_tree_reuses,
             hit_rate: if self.hits + self.misses > 0 {
                 (self.hits as f64) / ((self.hits + self.misses) as f64) * 100.0
             } else {
@@ -177,6 +182,7 @@ impl FileCache {
         // Reset counters for next measurement
         self.hits = 0;
         self.misses = 0;
+        self.cached_tree_reuses = 0;
         
         stats
     }
@@ -188,6 +194,11 @@ impl FileCache {
             self.clear();
         }
     }
+
+    /// Increment cached-tree reuse counter (called by TreeBuilder when last_analysis_cache is reused)
+    pub fn incr_cached_tree_reuse(&mut self) {
+        self.cached_tree_reuses += 1;
+    }
 }
 
 /// Cache performance statistics
@@ -196,6 +207,7 @@ pub struct CacheStats {
     pub hits: usize,
     pub misses: usize,
     pub cached_files: usize,
+    pub cached_tree_reuses: usize,
     pub hit_rate: f64,
 }
 
