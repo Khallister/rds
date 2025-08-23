@@ -44,13 +44,20 @@ impl FileCache {
     }
 
     /// Check if a file is cached and up-to-date
-    pub async fn is_cached(&mut self, file_path: &str) -> Result<bool> {
+    /// Check if a file is cached and up-to-date.
+    /// `fs_path` is the actual filesystem path used to read metadata.
+    /// `cache_key` is the storage-normalized key used to index the internal cache map.
+    pub async fn is_cached(&mut self, fs_path: &str, cache_key: &str) -> Result<bool> {
         if !self.enabled {
             return Ok(false);
         }
 
-        let path = Path::new(file_path);
+        // Debug: show lookup attempt
+        eprintln!("[cache] is_cached lookup -> cache_key='{}' fs_path='{}' enabled={}", cache_key, fs_path, self.enabled);
+
+        let path = Path::new(fs_path);
         if !path.exists() {
+            eprintln!("[cache] is_cached: fs_path does not exist: '{}'", fs_path);
             return Ok(false);
         }
 
@@ -59,14 +66,17 @@ impl FileCache {
         let modified_time = metadata.modified()?;
         let file_size = metadata.len();
 
-        // Check if we have this file in cache
-        if let Some(entry) = self.cache.get(file_path) {
+        // Check if we have this file in cache using cache_key
+        if let Some(entry) = self.cache.get(cache_key) {
+            eprintln!("[cache] is_cached: found entry for key='{}' (cached_file='{}')", cache_key, entry.file_path);
             // Check if the cached entry is still valid
             if entry.modified_time == modified_time && entry.file_size == file_size {
+                eprintln!("[cache] is_cached: entry valid (mtime and size match)");
                 return Ok(true);
             } else {
+                eprintln!("[cache] is_cached: entry invalid, removing from cache (mtime or size changed)");
                 // File has changed, remove from cache
-                self.cache.remove(file_path);
+                self.cache.remove(cache_key);
             }
         }
 
@@ -74,28 +84,37 @@ impl FileCache {
     }
 
     /// Get cached dependencies for a file
-    pub fn get_cached_dependencies(&mut self, file_path: &str) -> Option<Vec<Dependency>> {
+    /// Get cached dependencies by storage-normalized cache key.
+    pub fn get_cached_dependencies(&mut self, cache_key: &str) -> Option<Vec<Dependency>> {
         if !self.enabled {
             return None;
         }
 
-        if let Some(entry) = self.cache.get(file_path) {
+        eprintln!("[cache] get_cached_dependencies lookup -> cache_key='{}'", cache_key);
+        if let Some(entry) = self.cache.get(cache_key) {
             self.hits += 1;
+            eprintln!("[cache] get_cached_dependencies: hit for key='{}' (file='{}')", cache_key, entry.file_path);
             Some(entry.dependencies.clone())
         } else {
             self.misses += 1;
+            eprintln!("[cache] get_cached_dependencies: miss for key='{}'", cache_key);
             None
         }
     }
 
     /// Cache the dependencies for a file
-    pub async fn cache_dependencies(&mut self, file_path: &str, dependencies: Vec<Dependency>) -> Result<()> {
+    /// Cache the dependencies for a file.
+    /// `fs_path` is the filesystem path used to read the file; `cache_key` is the storage-normalized key to store under.
+    pub async fn cache_dependencies(&mut self, fs_path: &str, cache_key: &str, dependencies: Vec<Dependency>) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
 
-        let path = Path::new(file_path);
+        eprintln!("[cache] cache_dependencies store -> cache_key='{}' fs_path='{}'", cache_key, fs_path);
+
+        let path = Path::new(fs_path);
         if !path.exists() {
+            eprintln!("[cache] cache_dependencies: fs_path does not exist, skipping: '{}'", fs_path);
             return Ok(());
         }
 
@@ -105,18 +124,19 @@ impl FileCache {
         let file_size = metadata.len();
 
         // Read file content for hash calculation
-        let content = tokio::fs::read_to_string(path).await?;
+        let content = crate::utils::read_file_text_async(path).await?;
         let content_hash = calculate_hash(&content);
 
         let entry = CacheEntry {
-            file_path: file_path.to_string(),
+            file_path: fs_path.to_string(),
             modified_time,
             content_hash,
             dependencies,
             file_size,
         };
 
-        self.cache.insert(file_path.to_string(), entry);
+    eprintln!("[cache] cache_dependencies: inserting entry for key='{}' (file='{}')", cache_key, fs_path);
+    self.cache.insert(cache_key.to_string(), entry);
         Ok(())
     }
 
@@ -193,30 +213,31 @@ fn calculate_hash(content: &str) -> u64 {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
-    use tokio::io::AsyncWriteExt;
 
     #[tokio::test]
     async fn test_file_cache_basic() {
         let mut cache = FileCache::new(true);
         
         // Create a temporary file
-        let mut temp_file = NamedTempFile::new().unwrap();
-        let file_path = temp_file.path().to_string_lossy().to_string();
+    let temp_file = NamedTempFile::new().unwrap();
+    let file_path = temp_file.path().to_string_lossy().to_string();
         
         // Write some content
         tokio::fs::write(&file_path, "console.log('test');").await.unwrap();
         
-        // Should not be cached initially
-        assert!(!cache.is_cached(&file_path).await.unwrap());
-        assert!(cache.get_cached_dependencies(&file_path).is_none());
-        
-        // Cache some dependencies
-        let deps = vec![];
-        cache.cache_dependencies(&file_path, deps.clone()).await.unwrap();
-        
-        // Should be cached now
-        assert!(cache.is_cached(&file_path).await.unwrap());
-        assert_eq!(cache.get_cached_dependencies(&file_path), Some(deps));
+    // Should not be cached initially
+    let cache_key = file_path.clone();
+    assert!(!cache.is_cached(&file_path, &cache_key).await.unwrap());
+    assert!(cache.get_cached_dependencies(&cache_key).is_none());
+
+    // Cache some dependencies
+    let deps = vec![];
+    cache.cache_dependencies(&file_path, &cache_key, deps.clone()).await.unwrap();
+
+    // Should be cached now
+    assert!(cache.is_cached(&file_path, &cache_key).await.unwrap());
+    let got_deps = cache.get_cached_dependencies(&cache_key).unwrap();
+    assert_eq!(got_deps.len(), deps.len());
         
         let stats = cache.get_stats();
         assert_eq!(stats.hits, 1);
@@ -229,7 +250,7 @@ mod tests {
         let mut cache = FileCache::new(true);
         
         // Create a temporary file
-        let mut temp_file = NamedTempFile::new().unwrap();
+    let temp_file = NamedTempFile::new().unwrap();
         let file_path = temp_file.path().to_string_lossy().to_string();
         
         // Write initial content
@@ -237,15 +258,17 @@ mod tests {
         
         // Cache dependencies
         let deps = vec![];
-        cache.cache_dependencies(&file_path, deps).await.unwrap();
-        assert!(cache.is_cached(&file_path).await.unwrap());
+    let cache_key = file_path.clone();
+    cache.cache_dependencies(&file_path, &cache_key, deps).await.unwrap();
+    assert!(cache.is_cached(&file_path, &cache_key).await.unwrap());
         
         // Modify the file
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         tokio::fs::write(&file_path, "console.log('modified');").await.unwrap();
         
         // Should no longer be cached due to modification
-        assert!(!cache.is_cached(&file_path).await.unwrap());
+    let cache_key = file_path.clone();
+    assert!(!cache.is_cached(&file_path, &cache_key).await.unwrap());
     }
 
     #[tokio::test]
@@ -259,11 +282,13 @@ mod tests {
         tokio::fs::write(&file_path, "console.log('test');").await.unwrap();
         
         // Should never be cached when disabled
-        assert!(!cache.is_cached(&file_path).await.unwrap());
-        
-        let deps = vec![];
-        cache.cache_dependencies(&file_path, deps).await.unwrap();
-        assert!(!cache.is_cached(&file_path).await.unwrap());
-        assert!(cache.get_cached_dependencies(&file_path).is_none());
+    let cache_key = file_path.clone();
+    assert!(!cache.is_cached(&file_path, &cache_key).await.unwrap());
+    
+    let deps = vec![];
+    let cache_key = file_path.clone();
+    cache.cache_dependencies(&file_path, &cache_key, deps).await.unwrap();
+    assert!(!cache.is_cached(&file_path, &cache_key).await.unwrap());
+    assert!(cache.get_cached_dependencies(&cache_key).is_none());
     }
 }

@@ -67,14 +67,21 @@ impl AnalysisRunner {
             println!("{}", style("🚀 Starting dependency analysis...").bold().green());
         }
 
-        let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
-        
-        let duration = start_time.elapsed();
+    let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
+
+    // Retrieve cache statistics from the analyzer (uses TreeBuilder/FileCache)
+    let cache_stats = analyzer.get_cache_stats();
+
+    let duration = start_time.elapsed();
         
         // Finish progress bar
         if let Some(pb) = progress_bar {
             pb.finish_with_message("Complete!");
         }
+
+        // Print cache statistics summary
+        println!("🗄️  Cache: {} hits, {} misses, {} files cached (hit rate {:.1}%)",
+            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.hit_rate);
 
         // Display results
         Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli).await?;

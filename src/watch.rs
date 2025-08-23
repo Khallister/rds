@@ -164,8 +164,11 @@ impl WatchRunner {
         println!("{}", style("🔄 Running analysis...").blue());
         let start_time = Instant::now();
         
-        let mut analyzer = analyzer.lock().await;
-        let (result, num_threads) = analyzer.analyze_files_incremental(&changed_files).await?;
+    let mut analyzer = analyzer.lock().await;
+    let (result, num_threads) = analyzer.analyze_files_incremental(&changed_files).await?;
+
+    // Retrieve incremental cache stats to show cache usage in watch mode
+    let cache_stats = analyzer.get_incremental_cache_stats();
         
         let duration = start_time.elapsed();
         
@@ -176,6 +179,10 @@ impl WatchRunner {
             duration,
             num_threads
         );
+
+        // Print incremental cache stats
+        println!("  🗄️  Cache: {} hits, {} misses, {} files cached (hit rate {:.1}%)",
+            cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.hit_rate);
         
         // Show appropriate analysis results based on CLI flags  
         let show_circular = cli.circular || (!cli.circular && !cli.tree);

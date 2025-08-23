@@ -1,7 +1,34 @@
 //! Utility functions and helpers used throughout the RDS application.
 
 use notify::Event;
-use std::path::Path;
+use std::path::{Path, PathBuf, Component};
+use anyhow::Context;
+use std::env;
+use tokio::fs as tokio_fs;
+use std::fs as std_fs;
+
+/// Lexically normalize a path by resolving `.` and `..` components without
+/// performing filesystem I/O. Returns an absolute PathBuf by prepending the
+/// current working directory if the input path is relative.
+fn lexical_normalize_abs(path: &Path) -> PathBuf {
+    let mut base = if path.is_absolute() {
+        PathBuf::new()
+    } else {
+        env::current_dir().unwrap_or_default()
+    };
+
+    for comp in path.components() {
+        match comp {
+            Component::Prefix(p) => base.push(p.as_os_str()),
+            Component::RootDir => base.push(std::path::MAIN_SEPARATOR.to_string()),
+            Component::CurDir => {}
+            Component::ParentDir => { let _ = base.pop(); }
+            Component::Normal(os) => base.push(os),
+        }
+    }
+
+    base
+}
 
 /// Extract relevant file changes from a file system event
 pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
@@ -123,6 +150,39 @@ pub mod exit_codes {
         
         Ok(())
     }
+}
+
+/// Read file with improved error context (async)
+pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
+    // attempt to canonicalize for clearer errors
+    let cwd = env::current_dir().unwrap_or_default();
+
+    // Prefer filesystem canonicalization when possible (resolves symlinks).
+    // If that fails (file doesn't exist yet or permission issues), fall back
+    // to a lexical normalization that resolves `..` and `.` without I/O so
+    // the error message shows a clean absolute path.
+    let attempted_fs = tokio::fs::canonicalize(path).await;
+    let attempted = match attempted_fs {
+        Ok(p) => p,
+        Err(_) => lexical_normalize_abs(path),
+    };
+
+    tokio_fs::read_to_string(&attempted)
+        .await
+        .with_context(|| format!("Failed to read file: {} (attempted: {}) from cwd: {}", path.display(), attempted.display(), cwd.display()))
+}
+
+/// Read file with improved error context (sync)
+pub fn read_file_text_sync(path: &Path) -> anyhow::Result<String> {
+    let cwd = env::current_dir().unwrap_or_default();
+
+    let attempted = match std_fs::canonicalize(path) {
+        Ok(p) => p,
+        Err(_) => lexical_normalize_abs(path),
+    };
+
+    std_fs::read_to_string(&attempted)
+        .with_context(|| format!("Failed to read file: {} (attempted: {}) from cwd: {}", path.display(), attempted.display(), cwd.display()))
 }
 
 #[cfg(test)]

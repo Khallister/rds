@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use tokio::fs;
 use crate::types::{DependencyTree, ParseOptions, ProgressEvent};
 use crate::parser::{JavaScriptParser, VueParser, ModuleResolver};
 use crate::cache::{FileCache, CacheStats};
@@ -59,6 +58,8 @@ impl TreeBuilder {
     ) -> Result<(DependencyTree, usize)> {
         // Configure cache based on options
         self.cache.set_enabled(options.cache_enabled);
+
+    eprintln!("[tree] build_dependency_tree called with entries={:?} context='{}' cache_enabled={}", entries, options.context.to_string_lossy(), options.cache_enabled);
         
         let mut tree = DependencyTree::new();
         
@@ -70,12 +71,12 @@ impl TreeBuilder {
         for entry in entries {
             // Check if this is a direct file path first
             if Path::new(entry).is_file() {
-                let absolute_path = if Path::new(entry).is_absolute() {
-                    entry.to_string()
+                let read_path_buf = if Path::new(entry).is_absolute() {
+                    PathBuf::from(entry)
                 } else {
-                    options.context.join(entry).to_string_lossy().to_string()
+                    options.context.join(entry)
                 };
-                all_files.push(absolute_path);
+                all_files.push(read_path_buf.to_string_lossy().to_string());
                 continue;
             }
             
@@ -98,9 +99,14 @@ impl TreeBuilder {
             }
         }
 
+    eprintln!("[tree] expanded all_files={:?}", all_files);
+
         // Multi-threaded recursive dependency parsing
         // Process dependencies in parallel batches, recursively discovering new dependencies
-        let mut processed_files = std::collections::HashSet::new();
+    // Track processed files by their storage-normalized key to avoid
+    // duplicate work regardless of whether we see absolute or normalized
+    // paths in the pipeline.
+    let mut processed_files = std::collections::HashSet::new();
         let mut files_to_process: Vec<String> = all_files;
         
         use futures::stream::{self, StreamExt};
@@ -110,17 +116,18 @@ impl TreeBuilder {
             let current_batch: Vec<String> = files_to_process.drain(..).collect();
             let mut new_dependencies = Vec::new();
             
-            // Filter out already processed files before parallel processing
-            let unprocessed_batch: Vec<String> = current_batch.into_iter()
-                .filter(|file_path| {
-                    if !processed_files.contains(file_path) {
-                        processed_files.insert(file_path.clone());
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .collect();
+            // Filter out already processed files before parallel processing.
+            // Normalize each candidate to the storage key and check membership
+            // in `processed_files`. We still carry the filesystem path forward
+            // in the batch so that file system operations work correctly.
+            let mut unprocessed_batch: Vec<String> = Vec::new();
+            for file_path in current_batch.into_iter() {
+                let normalized = self.normalize_path_for_storage(&file_path);
+                if !processed_files.contains(&normalized) {
+                    processed_files.insert(normalized);
+                    unprocessed_batch.push(file_path);
+                }
+            }
             
             if unprocessed_batch.is_empty() {
                 continue;
@@ -131,17 +138,30 @@ impl TreeBuilder {
             let mut files_to_parse = Vec::new();
             
             for file_path in unprocessed_batch {
-                if self.cache.is_cached(&file_path).await? {
+                // Determine filesystem path to use for metadata/reads. If the
+                // path is storage-normalized (starts with ../ or contains no
+                // drive), try to resolve it relative to options.context.
+                let fs_path = if Path::new(&file_path).is_absolute() {
+                    file_path.clone()
+                } else {
+                    options.context.join(&file_path).to_string_lossy().to_string()
+                };
+
+                // Use a storage-normalized key for caching (so keys in the cache
+                // match the normalized IDs used in the dependency tree).
+                let cache_key = self.normalize_path_for_storage(&fs_path);
+
+                if self.cache.is_cached(&fs_path, &cache_key).await? {
                     // Use cached dependencies
-                    if let Some(cached_deps) = self.cache.get_cached_dependencies(&file_path) {
-                        cached_results.push((file_path, Some(cached_deps)));
+                    if let Some(cached_deps) = self.cache.get_cached_dependencies(&cache_key) {
+                        cached_results.push((fs_path.clone(), Some(cached_deps)));
                     } else {
                         // Cache says it's cached but no deps found - treat as needing parse
-                        files_to_parse.push(file_path);
+                        files_to_parse.push(fs_path.clone());
                     }
                 } else {
                     // Need to parse this file
-                    files_to_parse.push(file_path);
+                    files_to_parse.push(fs_path.clone());
                 }
             }
             
@@ -189,11 +209,14 @@ impl TreeBuilder {
             while let Some(result) = file_results.next().await {
                 match result {
                     Ok((file_path, dependencies_opt)) => {
-                        // Cache the newly parsed dependencies
+                        // `file_path` here is a filesystem path; compute a
+                        // storage-normalized cache key to store the dependencies
+                        // under a deterministic ID used by the tree.
                         if let Some(ref deps) = dependencies_opt {
-                            self.cache.cache_dependencies(&file_path, deps.clone()).await?;
+                            let cache_key = self.normalize_path_for_storage(&file_path);
+                            self.cache.cache_dependencies(&file_path, &cache_key, deps.clone()).await?;
                         }
-                        
+
                         let normalized_path = self.normalize_path_for_storage(&file_path);
                         tree.insert(normalized_path, dependencies_opt.clone());
                         
@@ -265,9 +288,27 @@ impl TreeBuilder {
             callback(ProgressEvent::Start, file_path);
         }
         
+        // Resolve file_path to an absolute path for reading. Some callers pass
+        // storage-normalized paths (e.g. "../../project/...") which should be
+        // resolved relative to the analysis context.
+        // Interpret storage-normalized paths that were produced by
+        // `normalize_path_for_storage`, e.g. "../../project/...", as paths
+        // relative to the parent of the workdir. This maps sibling projects
+        // correctly (e.g. C:\Projects\rds + "../../lingo-prototype" ->
+        // C:\Projects\lingo-prototype).
+        let read_path_buf = if Path::new(file_path).is_absolute() {
+            PathBuf::from(file_path)
+        } else if file_path.starts_with("../../") || file_path.starts_with("..\\..\\") {
+            let cwd = std::env::current_dir().unwrap_or_default();
+            let rest = &file_path[6..]; // strip ../../ or ..\..\ (length 6)
+            let parent = cwd.parent().unwrap_or(&cwd);
+            parent.join(rest)
+        } else {
+            options.context.join(file_path)
+        };
+
         // Read file content and parse (no cache in static method)
-        let content = fs::read_to_string(file_path).await
-            .with_context(|| format!("Failed to read file: {}", file_path))?;
+        let content = crate::utils::read_file_text_async(&read_path_buf).await?;
         
         // Parse dependencies
         let dependencies = if is_vue {
@@ -302,6 +343,8 @@ impl TreeBuilder {
     ) -> Result<(DependencyTree, usize)> {
         // Configure cache based on options
         self.cache.set_enabled(options.cache_enabled);
+
+    eprintln!("[tree] build_dependency_tree_incremental called with changed_files={:?} cache_enabled={}", changed_files, options.cache_enabled);
         
         // Get number of available threads
         let num_threads = rayon::current_num_threads();
@@ -309,10 +352,14 @@ impl TreeBuilder {
         // For watch mode with cache enabled, check if we can avoid full analysis
         if options.cache_enabled && changed_files.len() == 1 {
             let changed_file = &changed_files[0];
+
+            eprintln!("[tree] single changed_file='{}'", changed_file);
             
             // If we have a previous analysis, compare the file's dependencies to see if anything meaningful changed
             if let Some((cached_file, cached_tree)) = self.last_analysis_cache.clone() {
+                eprintln!("[tree] last_analysis_cache present: cached_file='{}'", cached_file);
                 if &cached_file == changed_file {
+                    eprintln!("[tree] changed_file equals cached_file -> attempting single-file parse comparison");
                     // Parse just the changed file to get its current dependencies (without recursion)
                     let mut temp_tree = DependencyTree::new();
                     self.parse_single_file_deps(changed_file, options, &mut temp_tree).await?;
@@ -348,7 +395,7 @@ impl TreeBuilder {
         }
         
         // Dependencies have changed or no cache available - do full analysis
-        let (mut tree, threads) = self.build_dependency_tree(changed_files, options).await?;
+    let (mut tree, threads) = self.build_dependency_tree(changed_files, options).await?;
         
         // Use resolve_dependencies to ensure all dependency IDs are resolved
         self.resolve_dependencies(&mut tree, options).await?;
@@ -392,7 +439,18 @@ impl TreeBuilder {
         
         // Always re-parse the file to get its current dependencies (no cache)
         // This is used for incremental analysis to detect dependency changes
-        let content = tokio::fs::read_to_string(file_path).await?;
+        let read_path_buf = if Path::new(file_path).is_absolute() {
+            PathBuf::from(file_path)
+        } else if file_path.starts_with("../../") || file_path.starts_with("..\\..\\") {
+            let cwd = std::env::current_dir().unwrap_or_default();
+            let rest = &file_path[6..];
+            let parent = cwd.parent().unwrap_or(&cwd);
+            parent.join(rest)
+        } else {
+            options.context.join(file_path)
+        };
+
+        let content = crate::utils::read_file_text_async(&read_path_buf).await?;
         
         let dependencies = if is_vue {
             self.vue_parser.parse_file(file_path, &content)?

@@ -1,6 +1,7 @@
 use anyhow::{Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
+use crate::utils;
 
 pub struct ModuleResolver {
     builtin_modules: std::collections::HashSet<String>,
@@ -159,7 +160,7 @@ impl ModuleResolver {
             
             // Try to resolve package.json
             let package_json_path = node_modules.join("package.json");
-            if let Ok(package_content) = fs::read_to_string(&package_json_path).await {
+            if let Ok(package_content) = utils::read_file_text_async(&package_json_path).await {
                 if let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&package_content) {
                     let main_field = package_json.get("module")
                         .or_else(|| package_json.get("main"))
@@ -214,7 +215,7 @@ impl ModuleResolver {
         loop {
             let tsconfig_path = current_dir.join("tsconfig.json");
             
-            if let Ok(content) = fs::read_to_string(&tsconfig_path).await {
+            if let Ok(content) = utils::read_file_text_async(&tsconfig_path).await {
                 if let Ok(tsconfig) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(paths) = tsconfig
                         .get("compilerOptions")
