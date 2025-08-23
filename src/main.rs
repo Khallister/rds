@@ -5,7 +5,7 @@ mod output;
 mod parser;
 mod types;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use console::style;
 use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
@@ -195,6 +195,9 @@ pub struct Cli {
     #[arg(long, action = clap::ArgAction::SetTrue, 
           help = "Disable file caching (override default)")]
     no_cache: bool,
+    
+    #[arg(long, help = "Number of threads to use for parallel processing")]
+    threads: Option<usize>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -206,6 +209,14 @@ pub enum SkipDynamicImportsArg {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    
+    // Configure thread pool if specified
+    if let Some(threads) = cli.threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()
+            .context("Failed to configure thread pool")?;
+    }
     
     if cli.watch {
         run_watch_mode(&cli).await
