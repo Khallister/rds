@@ -4,8 +4,7 @@ use crate::types::{Dependency, DependencyKind};
 use regex::Regex;
 
 pub struct JavaScriptParser {
-    // Import/require patterns
-    import_regex: Regex,
+      import_regex: Regex,
     require_regex: Regex,
     dynamic_import_regex: Regex,
     export_from_regex: Regex,
@@ -14,14 +13,10 @@ pub struct JavaScriptParser {
 impl JavaScriptParser {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            // Matches: import ... from "module" or import "module"
-            import_regex: Regex::new(r#"import\s+(?:[^"']+\s+from\s+)?["']([^"']+)["']"#)?,
-            // Matches: require("module") or require('module')
-            require_regex: Regex::new(r#"require\s*\(\s*["']([^"']+)["']\s*\)"#)?,
-            // Matches: import("module") or import('module')
-            dynamic_import_regex: Regex::new(r#"import\s*\(\s*["']([^"']+)["']\s*\)"#)?,
-            // Matches: export ... from "module"
-            export_from_regex: Regex::new(r#"export\s+(?:[^"']+\s+)?from\s+["']([^"']+)["']"#)?,
+                      import_regex: Regex::new(r#"import\s+(?:[^"']+\s+from\s+)?["']([^"']+)["']"#)?,
+                      require_regex: Regex::new(r#"require\s*\(\s*["']([^"']+)["']\s*\)"#)?,
+                      dynamic_import_regex: Regex::new(r#"import\s*\(\s*["']([^"']+)["']\s*\)"#)?,
+                      export_from_regex: Regex::new(r#"export\s+(?:[^"']+\s+)?from\s+["']([^"']+)["']"#)?,
         })
     }
     
@@ -30,11 +25,9 @@ impl JavaScriptParser {
         let issuer = file_path.to_string_lossy().to_string();
         let mut dependencies = Vec::new();
         
-        // Remove comments to avoid false matches
-        let cleaned_content = self.remove_comments(content);
+              let cleaned_content = self.remove_comments(content);
         
-        // Find static imports
-        for caps in self.import_regex.captures_iter(&cleaned_content) {
+              for caps in self.import_regex.captures_iter(&cleaned_content) {
             if let Some(module) = caps.get(1) {
                 dependencies.push(Dependency {
                     issuer: issuer.clone(),
@@ -45,8 +38,7 @@ impl JavaScriptParser {
             }
         }
         
-        // Find require calls
-        for caps in self.require_regex.captures_iter(&cleaned_content) {
+              for caps in self.require_regex.captures_iter(&cleaned_content) {
             if let Some(module) = caps.get(1) {
                 dependencies.push(Dependency {
                     issuer: issuer.clone(),
@@ -57,8 +49,7 @@ impl JavaScriptParser {
             }
         }
         
-        // Find dynamic imports
-        for caps in self.dynamic_import_regex.captures_iter(&cleaned_content) {
+              for caps in self.dynamic_import_regex.captures_iter(&cleaned_content) {
             if let Some(module) = caps.get(1) {
                 dependencies.push(Dependency {
                     issuer: issuer.clone(),
@@ -69,8 +60,7 @@ impl JavaScriptParser {
             }
         }
         
-        // Find export from
-        for caps in self.export_from_regex.captures_iter(&cleaned_content) {
+              for caps in self.export_from_regex.captures_iter(&cleaned_content) {
             if let Some(module) = caps.get(1) {
                 dependencies.push(Dependency {
                     issuer: issuer.clone(),
@@ -113,11 +103,11 @@ impl JavaScriptParser {
                     if let Some(&next_ch) = chars.peek() {
                         match next_ch {
                             '/' => {
-                                chars.next(); // consume the second /
+                                chars.next();
                                 in_single_comment = true;
                             }
                             '*' => {
-                                chars.next(); // consume the *
+                                chars.next();
                                 in_multi_comment = true;
                             }
                             _ => result.push(ch),
@@ -132,7 +122,7 @@ impl JavaScriptParser {
                 }
                 '*' if in_multi_comment => {
                     if let Some(&'/') = chars.peek() {
-                        chars.next(); // consume the /
+                        chars.next();
                         in_multi_comment = false;
                     }
                 }

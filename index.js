@@ -14,9 +14,7 @@ function getBinaryPath() {
     binaryName += '.exe';
   }
   
-  // For now, we'll use a simple binary selection
-  // In a full implementation, you'd have platform-specific binaries
-  const binaryPath = path.join(__dirname, 'bin', binaryName);
+      const binaryPath = path.join(__dirname, 'bin', binaryName);
   
   if (!fs.existsSync(binaryPath)) {
     console.error(`Binary not found for ${platform}-${arch}: ${binaryPath}`);
@@ -27,7 +25,6 @@ function getBinaryPath() {
   return binaryPath;
 }
 
-// Execute the binary with all arguments
 function main() {
   const binaryPath = getBinaryPath();
   const args = process.argv.slice(2);

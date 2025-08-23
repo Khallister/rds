@@ -15,7 +15,6 @@ pub mod types;
 pub mod utils;
 pub mod watch;
 
-// Re-export commonly used types for convenience
 pub use analyzer::DependencyAnalyzer;
 pub use analysis_runner::AnalysisRunner;
 pub use cli::Cli;

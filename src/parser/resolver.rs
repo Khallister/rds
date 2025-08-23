@@ -10,8 +10,7 @@ pub struct ModuleResolver {
 impl ModuleResolver {
     pub fn new() -> Self {
         let mut builtin_modules = std::collections::HashSet::new();
-        // Add Node.js built-in modules
-        for module in &[
+              for module in &[
             "assert", "buffer", "child_process", "cluster", "crypto", "dgram",
             "dns", "domain", "events", "fs", "http", "https", "module", "net",
             "os", "path", "punycode", "querystring", "readline", "stream",
@@ -23,16 +22,14 @@ impl ModuleResolver {
         Self { builtin_modules }
     }
     
-    // Normalize path separators to be consistent with the current platform
-    fn normalize_path(path: &str) -> String {
+      fn normalize_path(path: &str) -> String {
         let normalized = if cfg!(windows) {
             path.replace('/', "\\")
         } else {
             path.replace('\\', "/")
         };
         
-        // Manual normalization to resolve .. and . components
-        let separator = if cfg!(windows) { "\\" } else { "/" };
+              let separator = if cfg!(windows) { "\\" } else { "/" };
         let parts: Vec<&str> = normalized.split(separator).filter(|p| !p.is_empty()).collect();
         let mut result = Vec::new();
         
@@ -46,19 +43,16 @@ impl ModuleResolver {
                     }
                 }
                 "." => {
-                    // Skip current directory references
-                }
+                                  }
                 "" => {
-                    // Skip empty parts
-                }
+                                  }
                 _ => {
                     result.push(part);
                 }
             }
         }
         
-        // Reconstruct path, preserving leading separator for absolute paths
-        let result_path = result.join(separator);
+              let result_path = result.join(separator);
         if normalized.starts_with(separator) {
             format!("{}{}", separator, result_path)
         } else {
@@ -66,8 +60,7 @@ impl ModuleResolver {
         }
     }
     
-    // Normalize a PathBuf to use consistent separators
-    fn normalize_pathbuf(path: &Path) -> String {
+      fn normalize_pathbuf(path: &Path) -> String {
         Self::normalize_path(&path.to_string_lossy())
     }
     
@@ -79,32 +72,26 @@ impl ModuleResolver {
     ) -> Result<Option<String>> {
         let context = context.as_ref();
         
-        // Skip built-in modules
-        if self.builtin_modules.contains(request) {
+              if self.builtin_modules.contains(request) {
             return Ok(Some(request.to_string()));
         }
         
-        // Try TypeScript path mapping first
-        if let Some(resolved) = self.resolve_ts_alias(context, request, extensions).await? {
+               if let Some(resolved) = self.resolve_ts_alias(context, request, extensions).await? {
             return Ok(Some(resolved));
         }
         
-        // Absolute path
-        if Path::new(request).is_absolute() {
+              if Path::new(request).is_absolute() {
             return self.append_suffix(request, extensions).await;
         }
         
-        // Relative path
-        if request.starts_with('.') {
+              if request.starts_with('.') {
             let resolved = context.join(request);
             let normalized_path = Self::normalize_pathbuf(&resolved);
             return self.append_suffix(&normalized_path, extensions).await;
         }
 
-        // Node module
-        let result = self.resolve_node_module(context, request, extensions).await?;
-        // Ensure the final result is also normalized
-        if let Some(path) = result {
+              let result = self.resolve_node_module(context, request, extensions).await?;
+              if let Some(path) = result {
             Ok(Some(Self::normalize_path(&path)))
         } else {
             Ok(None)
@@ -117,15 +104,13 @@ impl ModuleResolver {
         extensions: &'a [String],
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<String>>> + Send + 'a>> {
         Box::pin(async move {
-            // First, try the path as-is (in case it already has an extension)
-            if let Ok(metadata) = fs::metadata(request).await {
+                      if let Ok(metadata) = fs::metadata(request).await {
                 if metadata.is_file() {
                     return Ok(Some(Self::normalize_path(request)));
                 }
             }
             
-            // Try with each extension
-            for ext in extensions {
+                       for ext in extensions {
                 let path_with_ext = format!("{}{}", request, ext);
                 if let Ok(metadata) = fs::metadata(&path_with_ext).await {
                     if metadata.is_file() {
@@ -134,8 +119,7 @@ impl ModuleResolver {
                 }
             }
             
-            // Try as directory with index file
-            if let Ok(metadata) = fs::metadata(request).await {
+                       if let Ok(metadata) = fs::metadata(request).await {
                 if metadata.is_dir() {
                     let index_path = Path::new(request).join("index");
                     let normalized_index = Self::normalize_pathbuf(&index_path);
@@ -158,8 +142,7 @@ impl ModuleResolver {
         loop {
             let node_modules = current.join("node_modules").join(request);
             
-            // Try to resolve package.json
-            let package_json_path = node_modules.join("package.json");
+                       let package_json_path = node_modules.join("package.json");
             if let Ok(package_content) = utils::read_file_text_async(&package_json_path).await {
                 if let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&package_content) {
                     let main_field = package_json.get("module")
@@ -174,13 +157,11 @@ impl ModuleResolver {
                 }
             }
             
-            // Try direct file resolution
-            if let Some(resolved) = self.append_suffix(&node_modules.to_string_lossy(), extensions).await? {
+                       if let Some(resolved) = self.append_suffix(&node_modules.to_string_lossy(), extensions).await? {
                 return Ok(Some(resolved));
             }
             
-            // Move up to parent directory
-            match current.parent() {
+                      match current.parent() {
                 Some(parent) => current = parent.to_path_buf(),
                 None => break,
             }
@@ -196,21 +177,14 @@ impl ModuleResolver {
         extensions: &[String],
     ) -> Result<Option<String>> {
         
-        // Skip scoped npm packages (e.g., @fortawesome/vue-fontawesome)
-        // These start with @ but contain a slash after the organization name
-        // Don't skip TypeScript aliases like @/path which start with @/
-        if request.starts_with('@') && !request.starts_with("@/") && request.chars().skip(1).any(|c| c == '/') {
-            // Check if this looks like a scoped npm package: @org/package
-            let parts: Vec<&str> = request.splitn(3, '/').collect();
+                            if request.starts_with('@') && !request.starts_with("@/") && request.chars().skip(1).any(|c| c == '/') {
+                      let parts: Vec<&str> = request.splitn(3, '/').collect();
             if parts.len() >= 2 && parts[0].starts_with('@') && !parts[1].is_empty() {
-                // This is likely a scoped npm package like @fortawesome/vue-fontawesome
-                // Don't try to resolve it as a TypeScript alias
-                return Ok(None);
+                                              return Ok(None);
             }
         }
         
-        // Look for tsconfig.json starting from context directory
-        let mut current_dir = context.to_path_buf();
+              let mut current_dir = context.to_path_buf();
         
         loop {
             let tsconfig_path = current_dir.join("tsconfig.json");
@@ -222,8 +196,7 @@ impl ModuleResolver {
                         .and_then(|c| c.get("paths"))
                         .and_then(|p| p.as_object()) 
                     {
-                        // Try to match request against path patterns
-                        for (pattern, targets) in paths {
+                                               for (pattern, targets) in paths {
                             if let Some(resolved) = self.match_ts_path_pattern(
                                 &tsconfig_path.parent().unwrap(),
                                 request,
@@ -238,8 +211,7 @@ impl ModuleResolver {
                 }
             }
             
-            // Move up to parent directory
-            match current_dir.parent() {
+                      match current_dir.parent() {
                 Some(parent) => current_dir = parent.to_path_buf(),
                 None => break,
             }
@@ -257,21 +229,19 @@ impl ModuleResolver {
         extensions: &[String],
     ) -> Result<Option<String>> {
         
-        // Handle wildcard patterns like "@/*" -> ["./src/*"]
-        if pattern.ends_with("/*") {
-            let pattern_prefix = &pattern[..pattern.len()-2]; // Remove "/*"
+              if pattern.ends_with("/*") {
+            let pattern_prefix = &pattern[..pattern.len()-2];
             
             if request.starts_with(pattern_prefix) {
-                let remaining = &request[pattern_prefix.len()..]; // Get the part after prefix (including /)
+                let remaining = &request[pattern_prefix.len()..];
                 
                 if let Some(target_array) = targets.as_array() {
                     for target in target_array {
                         if let Some(target_str) = target.as_str() {
                             if target_str.ends_with("/*") {
-                                let target_base = &target_str[..target_str.len()-2]; // Remove "/*"
+                                let target_base = &target_str[..target_str.len()-2];
                                 
-                                // Handle relative paths starting with "./"
-                                let target_path = if target_base.starts_with("./") {
+                                                              let target_path = if target_base.starts_with("./") {
                                     base_dir.join(&target_base[2..])
                                 } else if target_base.starts_with("/") {
                                     PathBuf::from(target_base)
@@ -279,8 +249,7 @@ impl ModuleResolver {
                                     base_dir.join(target_base)
                                 };
                                 
-                                // Append the remaining path and normalize
-                                let resolved_path = if remaining.is_empty() || remaining == "/" {
+                                                              let resolved_path = if remaining.is_empty() || remaining == "/" {
                                     target_path
                                 } else if remaining.starts_with('/') {
                                     target_path.join(&remaining[1..])
@@ -302,8 +271,7 @@ impl ModuleResolver {
                 }
             }
         } else {
-            // Handle exact matches like "@/utils" -> ["./src/utils"]
-            if request == pattern {
+                      if request == pattern {
                 if let Some(target_array) = targets.as_array() {
                     for target in target_array {
                         if let Some(target_str) = target.as_str() {

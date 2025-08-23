@@ -12,8 +12,7 @@ function getPlatformInfo() {
   const platform = process.platform;
   const arch = process.arch;
   
-  // Map Node.js platform/arch to release naming convention
-  const platformMap = {
+    const platformMap = {
     'win32': 'windows',
     'darwin': 'macos', 
     'linux': 'linux'
@@ -37,19 +36,16 @@ function downloadBinary() {
   const binDir = path.join(__dirname, 'bin');
   const binaryPath = path.join(binDir, binaryName);
   
-  // Create bin directory if it doesn't exist
-  if (!fs.existsSync(binDir)) {
+    if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
   
-  // For now, copy from local build if available
   const localBinary = path.join(__dirname, 'target', 'release', binaryName);
   if (fs.existsSync(localBinary)) {
     console.log('📦 Using local binary...');
     fs.copyFileSync(localBinary, binaryPath);
     
-    // Make executable on Unix systems
-    if (process.platform !== 'win32') {
+      if (process.platform !== 'win32') {
       fs.chmodSync(binaryPath, 0o755);
     }
     

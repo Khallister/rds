@@ -22,8 +22,7 @@ export function validateUser(user: User): { valid: boolean; errors: string[] } {
     errors.push('Age must be between 0 and 150');
   }
   
-  // This creates a circular dependency for testing
-  console.log(`Validating user on ${formatDate(new Date())}`);
+   console.log(`Validating user on ${formatDate(new Date())}`);
   
   return {
     valid: errors.length === 0,

@@ -17,11 +17,9 @@ impl ConsoleOutput {
         let digits = tree.len().to_string().len();
         
         for entry in entries {
-            // Normalize the entry path to match tree keys
-            let normalized_entry = self.normalize_path_for_display(entry);
+                      let normalized_entry = self.normalize_path_for_display(entry);
             
-            // Find the matching key in the tree
-            let matching_key = tree.keys()
+                      let matching_key = tree.keys()
                 .find(|key| {
                     let normalized_key = self.normalize_path_for_display(key);
                     normalized_key == normalized_entry || 
@@ -38,8 +36,7 @@ impl ConsoleOutput {
     }
     
     fn normalize_path_for_display(&self, path: &str) -> String {
-        // Convert path separators and remove redundant ./ patterns
-        path.replace('/', "\\")
+              path.replace('/', "\\")
             .replace("\\.\\", "\\")
             .trim_start_matches(".\\")
             .trim_start_matches("./")
@@ -69,8 +66,7 @@ impl ConsoleOutput {
             node_id
         );
         
-        // Check if it's a built-in module
-        if self.is_builtin_module(node_id) {
+              if self.is_builtin_module(node_id) {
             println!("{}", style(line).blue());
             return;
         }
@@ -94,12 +90,8 @@ impl ConsoleOutput {
         }
     }
     
-    /// Print circular dependencies using the shared, styled output.
-    ///
-    /// `take_limit` preserves the old semantics of showing a message when the
-    /// analyzer hit its search limit. `max_entries` can be used by callers
-    /// (like watch mode) to limit the number of cycles printed (e.g. 3).
-    pub fn print_circular(&self, circulars: &[Vec<String>], take_limit: Option<usize>, max_entries: Option<usize>) {
+        ///
+                pub fn print_circular(&self, circulars: &[Vec<String>], take_limit: Option<usize>, max_entries: Option<usize>) {
         let header = if circulars.is_empty() {
             style("🔄 Circular Dependencies").bold().green()
         } else {
@@ -118,15 +110,12 @@ impl ConsoleOutput {
             let to_show = max_entries.unwrap_or(circulars.len());
 
             for (i, circular) in circulars.iter().enumerate().take(to_show) {
-                // Print index
-                print!("  {:0width$}) ", i + 1, width = digits);
+                              print!("  {:0width$}) ", i + 1, width = digits);
 
-                // Print each segment styled (bold red) and dim arrows between
-                for (j, seg) in circular.iter().enumerate() {
+                              for (j, seg) in circular.iter().enumerate() {
                     print!("{}", style(seg).red().bold());
                     if j != circular.len() - 1 {
-                        // Use a nicer unicode arrow and dim it
-                        print!("{}", style(" → ").dim());
+                                              print!("{}", style(" → ").dim());
                     }
                 }
 
@@ -137,8 +126,7 @@ impl ConsoleOutput {
                 println!("  ... and {} more", circulars.len() - to_show);
             }
 
-            // Show "at least N" message if we hit the take limit
-            if let Some(limit) = take_limit {
+                      if let Some(limit) = take_limit {
                 if circulars.len() >= limit {
                     println!("  {} {} (search limit reached)",
                         style("At least").dim(),

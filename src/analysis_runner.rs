@@ -19,24 +19,20 @@ use crate::utils::{config, exit_codes};
 pub struct AnalysisRunner;
 
 impl AnalysisRunner {
-    /// Run a complete analysis once (non-watch mode)
-    pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
+        pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
         let show_progress = cli.progress.unwrap_or_else(|| {
             atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err()
         });
 
-        // Expand directories and apply filters
-        let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
+                let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
         if expanded_files.is_empty() {
             eprintln!("No files found matching the specified criteria");
             return Ok(());
         }
 
-        // Create parse options from CLI
-        let mut options = config::create_parse_options_from_cli(cli)?;
+                let mut options = config::create_parse_options_from_cli(cli)?;
         
-        // Set up progress callback if needed
-        let progress_bar = if show_progress {
+                let progress_bar = if show_progress {
             let pb = ProgressBar::new(expanded_files.len() as u64);
             pb.set_style(
                 ProgressStyle::default_bar()
@@ -49,8 +45,7 @@ impl AnalysisRunner {
             None
         };
         
-        // Set progress callback if we have a progress bar
-        if let Some(ref pb) = progress_bar {
+                if let Some(ref pb) = progress_bar {
             let pb_clone = pb.clone();
             options.progress_callback = Some(Box::new(move |_, msg| {
                 pb_clone.set_message(msg.to_string());
@@ -58,40 +53,30 @@ impl AnalysisRunner {
             }));
         }
 
-        // Initialize analyzer
-        let mut analyzer = DependencyAnalyzer::new(options)?;
+                let mut analyzer = DependencyAnalyzer::new(options)?;
 
-        // Run analysis with timing
-        let start_time = Instant::now();
+                let start_time = Instant::now();
         if show_progress {
             println!("{}", style("🚀 Starting dependency analysis...").bold().green());
         }
 
     let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
 
-    // Retrieve cache statistics from the analyzer (uses TreeBuilder/FileCache)
-    let cache_stats = analyzer.get_cache_stats();
+        let cache_stats = analyzer.get_cache_stats();
 
     let duration = start_time.elapsed();
         
-        // Finish progress bar
-        if let Some(pb) = progress_bar {
+                if let Some(pb) = progress_bar {
             pb.finish_with_message("Complete!");
         }
 
-        // Print cache statistics summary
-        println!("🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
+                println!("🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
             cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
 
-        // Display results
-        Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli).await?;
+               Self::display_analysis_results(&result, &expanded_files, duration, num_threads, cli).await?;
         
-        // Handle exit codes
-        if cli.throw && !result.circulars.is_empty() {
-            // Print a clear, styled error message before exiting so users running
-            // the binary directly (or CI) see a helpful message instead of only
-            // the generic process exit text.
-            eprintln!("{}", style("error: Circular Dependencies found").bold().red());
+                if cli.throw && !result.circulars.is_empty() {
+                                              eprintln!("{}", style("error: Circular Dependencies found").bold().red());
             eprintln!("  {} circular dependencies detected.", result.circulars.len());
             std::process::exit(1);
         }
@@ -113,8 +98,7 @@ impl AnalysisRunner {
     ) -> Result<()> {
         let console_output = ConsoleOutput::new();
         
-        // Print summary statistics
-        println!("{} {:.2?})", 
+                println!("{} {:.2?})", 
             style("✨ Analysis complete!").bold().green(),
             duration
         );
@@ -125,8 +109,7 @@ impl AnalysisRunner {
         println!("🧵 Analysis used {} threads for parallel processing", num_threads);
         println!();
 
-        // Show appropriate analysis results based on CLI flags
-        let show_tree = cli.tree || (!cli.circular && !cli.tree);
+                let show_tree = cli.tree || (!cli.circular && !cli.tree);
         let show_circular = cli.circular || (!cli.circular && !cli.tree);
 
         if show_tree {
@@ -135,12 +118,10 @@ impl AnalysisRunner {
 
         if show_circular {
             let console_output = ConsoleOutput::new();
-            // Use full listing in non-watch mode (no max_entries)
-            console_output.print_circular(&result.circulars, cli.take, None);
+                        console_output.print_circular(&result.circulars, cli.take, None);
         }
 
-        // Save to JSON if requested
-        if let Some(ref output_path) = cli.output {
+                if let Some(ref output_path) = cli.output {
             let json_output = JsonOutput::new();
             json_output.write_to_file(result, output_path).await?;
             println!("📄 Results saved to: {}", output_path.display());
@@ -149,10 +130,8 @@ impl AnalysisRunner {
         Ok(())
     }
     
-    // Delegated to `ConsoleOutput::print_circular`.
-    
-    /// Count total dependencies in the dependency tree
-    fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
+       
+        fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
         tree.values()
             .filter_map(|deps| deps.as_ref())
             .map(|deps| deps.len())
@@ -176,8 +155,7 @@ mod tests {
     
     #[test]
     fn test_print_circular_dependencies_empty() {
-    // This test mainly ensures the function doesn't panic
-    let out = ConsoleOutput::new();
+       let out = ConsoleOutput::new();
     out.print_circular(&[], None, None);
     }
 }

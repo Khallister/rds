@@ -7,9 +7,6 @@ use std::env;
 use tokio::fs as tokio_fs;
 use std::fs as std_fs;
 
-/// Lexically normalize a path by resolving `.` and `..` components without
-/// performing filesystem I/O. Returns an absolute PathBuf by prepending the
-/// current working directory if the input path is relative.
 pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
     let mut base = if path.is_absolute() {
         PathBuf::new()
@@ -30,7 +27,6 @@ pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
     base
 }
 
-/// Extract relevant file changes from a file system event
 pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
     let mut changed_files = Vec::new();
     
@@ -40,8 +36,7 @@ pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -
         notify::EventKind::Remove(_) => {
             for path in &event.paths {
                 if let Some(path_str) = path.to_str() {
-                    // Only include supported file types
-                    if is_relevant_file_change(path) {
+                                       if is_relevant_file_change(path) {
                         changed_files.push(path_str.to_string());
                     }
                 }
@@ -53,24 +48,20 @@ pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -
     changed_files
 }
 
-/// Check if a file change is relevant for dependency analysis
 fn is_relevant_file_change(path: &Path) -> bool {
-    // Check if it's a supported file type
-    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
         matches!(extension, "js" | "jsx" | "ts" | "tsx" | "mjs" | "json" | "vue")
     } else {
         false
     }
 }
 
-/// Configuration utilities
 pub mod config {
     use crate::types::{ParseOptions, SkipDynamicImports};
     use crate::cli::{Cli, SkipDynamicImportsArg};
     use anyhow::Result;
     
-    /// Create ParseOptions from CLI arguments
-    pub fn create_parse_options_from_cli(cli: &Cli) -> Result<ParseOptions> {
+        pub fn create_parse_options_from_cli(cli: &Cli) -> Result<ParseOptions> {
         let mut options = ParseOptions::default();
         
         if let Some(context) = &cli.context {
@@ -100,11 +91,9 @@ pub mod config {
 pub mod threading {
     use anyhow::Result;
     
-    /// Configure the tokio runtime thread pool if specified
-    pub fn configure_thread_pool(threads: Option<usize>) -> Result<()> {
+        pub fn configure_thread_pool(threads: Option<usize>) -> Result<()> {
         if let Some(thread_count) = threads {
-            // Configure rayon thread pool for CPU-intensive work
-            rayon::ThreadPoolBuilder::new()
+                        rayon::ThreadPoolBuilder::new()
                 .num_threads(thread_count)
                 .build_global()
                 .map_err(|e| anyhow::anyhow!("Failed to configure thread pool: {}", e))?;
@@ -113,16 +102,13 @@ pub mod threading {
     }
 }
 
-/// Exit code handling utilities  
 pub mod exit_codes {
     use anyhow::Result;
     
-    /// Handle custom exit codes based on analysis results
-    pub fn handle_exit_codes(spec: &str, circulars: &[Vec<String>]) -> Result<()> {
+        pub fn handle_exit_codes(spec: &str, circulars: &[Vec<String>]) -> Result<()> {
         let mut exit_code = 0;
         
-        // Parse exit code specification
-        for part in spec.split(',') {
+                for part in spec.split(',') {
             let parts: Vec<&str> = part.split(':').collect();
             if parts.len() != 2 {
                 return Err(anyhow::anyhow!("Invalid exit code format: {}", part));
@@ -152,16 +138,10 @@ pub mod exit_codes {
     }
 }
 
-/// Read file with improved error context (async)
 pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
-    // attempt to canonicalize for clearer errors
-    let cwd = env::current_dir().unwrap_or_default();
+        let cwd = env::current_dir().unwrap_or_default();
 
-    // Prefer filesystem canonicalization when possible (resolves symlinks).
-    // If that fails (file doesn't exist yet or permission issues), fall back
-    // to a lexical normalization that resolves `..` and `.` without I/O so
-    // the error message shows a clean absolute path.
-    let attempted_fs = tokio::fs::canonicalize(path).await;
+                  let attempted_fs = tokio::fs::canonicalize(path).await;
     let attempted = match attempted_fs {
         Ok(p) => p,
         Err(_) => lexical_normalize_abs(path),
@@ -172,7 +152,6 @@ pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
         .with_context(|| format!("Failed to read file: {} (attempted: {}) from cwd: {}", path.display(), attempted.display(), cwd.display()))
 }
 
-/// Read file with improved error context (sync)
 pub fn read_file_text_sync(path: &Path) -> anyhow::Result<String> {
     let cwd = env::current_dir().unwrap_or_default();
 

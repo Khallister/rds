@@ -26,14 +26,12 @@ use crate::watch::WatchRunner;
 async fn main() -> Result<()> {
     let cli = Cli::parse_args();
     
-    // Validate CLI arguments
-    if let Err(e) = cli.validate() {
+        if let Err(e) = cli.validate() {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
     
-    // Configure thread pool if specified
-    if let Err(e) = threading::configure_thread_pool(cli.threads) {
+        if let Err(e) = threading::configure_thread_pool(cli.threads) {
         eprintln!("Warning: {}", e);
     }
     

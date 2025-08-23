@@ -15,30 +15,25 @@ use crate::filesystem::FileSystem;
 use crate::output::ConsoleOutput;
 use crate::utils::{config, extract_relevant_file_changes};
 
-/// Watch mode orchestrator
 pub struct WatchRunner;
 
 impl WatchRunner {
-    /// Run analysis in watch mode with file monitoring
-    pub async fn run_watch_mode(cli: &Cli) -> Result<()> {
+        pub async fn run_watch_mode(cli: &Cli) -> Result<()> {
         println!("{} {} ({})", 
             style("👁️").blue(),
             style("Starting watch mode...").bold().blue(),
             style("Press Ctrl+C to exit").dim()
         );
         
-        // Expand directories and apply filters
-        let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
+              let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
         if expanded_files.is_empty() {
             eprintln!("No files found matching the specified criteria");
             return Ok(());
         }
         
-        // Set up file watcher
-        let (tx, mut rx) = mpsc::channel(100);
+              let (tx, mut rx) = mpsc::channel(100);
         
-        // Create a watcher
-        let mut watcher = RecommendedWatcher::new(
+              let mut watcher = RecommendedWatcher::new(
             move |res: Result<Event, notify::Error>| {
                 if let Ok(event) = res {
                     if let Err(e) = tx.try_send(event) {
@@ -49,11 +44,9 @@ impl WatchRunner {
             Config::default(),
         )?;
         
-        // Watch all directories that contain our target files
-        let watch_dirs = FileSystem::get_watch_directories(&expanded_files);
+              let watch_dirs = FileSystem::get_watch_directories(&expanded_files);
         
-        // Also watch the input directories directly
-        for input in &cli.files {
+              for input in &cli.files {
             let path = Path::new(input);
             if path.is_dir() {
                 if let Err(e) = watcher.watch(path, RecursiveMode::Recursive) {
@@ -81,58 +74,49 @@ impl WatchRunner {
             style("💡 Press Ctrl+C to exit, or modify files to trigger analysis").dim()
         );
         
-        // Track changed files for intelligent analysis with cancellation
-        let mut changed_files: HashSet<String> = HashSet::new();
+               let mut changed_files: HashSet<String> = HashSet::new();
         let mut last_change = Instant::now();
         let mut analysis_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut logged_files: HashSet<String> = HashSet::new();
         
-        // Create persistent analyzer for watch mode to maintain cache between analyses
-        let watch_options = config::create_parse_options_from_cli(cli)?;
+              let watch_options = config::create_parse_options_from_cli(cli)?;
         let persistent_analyzer = Arc::new(tokio::sync::Mutex::new(DependencyAnalyzer::new(watch_options)?));
         
-        // Handle file system events
-        const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
+              const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
         
         loop {
             tokio::select! {
-                // Handle file system events
-                Some(event) = rx.recv() => {
+                              Some(event) = rx.recv() => {
                     let relevant_changes = extract_relevant_file_changes(&event, &expanded_files);
                     
                     if !relevant_changes.is_empty() {
                         for file in relevant_changes {
                             changed_files.insert(file.clone());
                             
-                            // Log file changes (only once per file)
-                            if !logged_files.contains(&file) {
+                                                      if !logged_files.contains(&file) {
                                 println!("📝 File change detected: {}", style(&file).yellow());
                                 logged_files.insert(file);
                             }
                         }
                         last_change = Instant::now();
                         
-                        // Cancel any existing analysis task
-                        if let Some(task) = analysis_task.take() {
+                                              if let Some(task) = analysis_task.take() {
                             task.abort();
                         }
                     }
                 }
                 
-                // Debounced analysis trigger
-                _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                               _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
                     if !changed_files.is_empty() && 
                        last_change.elapsed() >= DEBOUNCE_DURATION {
                         
                         let files_to_analyze: Vec<String> = changed_files.drain().collect();
-                        logged_files.clear(); // Reset logged files for next batch
+                        logged_files.clear();
                         
-                        // Clone necessary data for the analysis task
-                        let analyzer = Arc::clone(&persistent_analyzer);
+                                              let analyzer = Arc::clone(&persistent_analyzer);
                         let cli_clone = cli.clone();
                         
-                        // Start analysis in background
-                        analysis_task = Some(tokio::spawn(async move {
+                                              analysis_task = Some(tokio::spawn(async move {
                             if let Err(e) = Self::run_incremental_analysis(
                                 analyzer, 
                                 files_to_analyze, 
@@ -144,8 +128,7 @@ impl WatchRunner {
                     }
                 }
                 
-                // Handle Ctrl+C gracefully
-                _ = tokio::signal::ctrl_c() => {
+                              _ = tokio::signal::ctrl_c() => {
                     println!("\n{}", style("🛑 Stopping watch mode...").yellow());
                     break;
                 }
@@ -155,8 +138,7 @@ impl WatchRunner {
         Ok(())
     }
     
-    /// Run incremental analysis for watch mode
-    async fn run_incremental_analysis(
+        async fn run_incremental_analysis(
         analyzer: Arc<tokio::sync::Mutex<DependencyAnalyzer>>,
         changed_files: Vec<String>,
         cli: &Cli,
@@ -167,15 +149,11 @@ impl WatchRunner {
     let mut analyzer = analyzer.lock().await;
     let (result, num_threads) = analyzer.analyze_files_incremental(&changed_files).await?;
 
-    // Retrieve incremental cache stats to show cache usage in watch mode
-    let cache_stats = analyzer.get_incremental_cache_stats();
+      let cache_stats = analyzer.get_incremental_cache_stats();
         
         let duration = start_time.elapsed();
         
-        // Compact output for watch mode - clear previous block and print fresh stats
-        // Use ANSI clear sequence; modern Windows terminals support ANSI. If not supported,
-        // this will be a no-op in many consoles.
-        print!("\x1b[2J\x1b[H");
+                           print!("\x1b[2J\x1b[H");
         println!("  📊 {} files, {} deps ({:.2?}, {} threads)",
             changed_files.len(),
             Self::count_total_dependencies(&result.tree),
@@ -183,17 +161,14 @@ impl WatchRunner {
             num_threads
         );
 
-        // Print incremental cache stats (single block)
-        println!("  🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
+              println!("  🗄️  Cache: {} hits, {} misses, {} files cached, {} tree reuses (hit rate {:.1}%)",
             cache_stats.hits, cache_stats.misses, cache_stats.cached_files, cache_stats.cached_tree_reuses, cache_stats.hit_rate);
         
-        // Show appropriate analysis results based on CLI flags  
-        let show_circular = cli.circular || (!cli.circular && !cli.tree);
+              let show_circular = cli.circular || (!cli.circular && !cli.tree);
         
         if show_circular {
             let console_output = ConsoleOutput::new();
-            // In watch mode limit to a small number of cycles for brevity
-            console_output.print_circular(&result.circulars, cli.take, Some(3));
+                      console_output.print_circular(&result.circulars, cli.take, Some(3));
         }
         
         if cli.tree {
@@ -206,10 +181,8 @@ impl WatchRunner {
         Ok(())
     }
     
-    // Delegated to `ConsoleOutput::print_circular` (with a max entries hint).
-    
-    /// Count total dependencies in the dependency tree
-    fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
+       
+        fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
         tree.values()
             .filter_map(|deps| deps.as_ref())
             .map(|deps| deps.len())
@@ -233,8 +206,7 @@ mod tests {
     
     #[test]
     fn test_print_circular_dependencies_compact() {
-        // This test mainly ensures the function doesn't panic
-    let out = ConsoleOutput::new();
+           let out = ConsoleOutput::new();
     out.print_circular(&[], None, Some(3));
     }
 }

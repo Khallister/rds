@@ -34,8 +34,7 @@ impl VueParser {
         
         let sfc = self.parse_sfc(content)?;
         
-        // Parse script section
-        if let Some(script) = &sfc.script {
+              if let Some(script) = &sfc.script {
             let script_deps = self.js_parser.parse_file(file_path, &script.content)
                 .context("Failed to parse Vue script section")?;
             
@@ -45,8 +44,7 @@ impl VueParser {
             }));
         }
         
-        // Parse setup script section
-        if let Some(script_setup) = &sfc.script_setup {
+              if let Some(script_setup) = &sfc.script_setup {
             let setup_deps = self.js_parser.parse_file(file_path, &script_setup.content)
                 .context("Failed to parse Vue setup script section")?;
             
@@ -56,14 +54,12 @@ impl VueParser {
             }));
         }
         
-        // Parse template section for component imports
-        if let Some(template) = &sfc.template {
+              if let Some(template) = &sfc.template {
             let template_deps = self.parse_vue_template(&template.content, &issuer)?;
             dependencies.extend(template_deps);
         }
         
-        // Parse style sections for @import statements
-        for style in &sfc.styles {
+              for style in &sfc.styles {
             let style_deps = self.parse_vue_style(&style.content, &issuer)?;
             dependencies.extend(style_deps);
         }
@@ -72,31 +68,26 @@ impl VueParser {
     }
     
     fn parse_sfc(&self, content: &str) -> Result<SfcDescriptor> {
-        // Extract script section (non-setup)
-        let script = self.script_regex.captures(content)
+              let script = self.script_regex.captures(content)
             .filter(|cap| {
-                // Make sure it's not a setup script
-                let full_tag = &content[cap.get(0).unwrap().range()];
+                              let full_tag = &content[cap.get(0).unwrap().range()];
                 !full_tag.contains("setup")
             })
             .map(|cap| SfcBlock {
                 content: cap.get(1).unwrap().as_str().to_string(),
             });
             
-        // Extract setup script section
-        let script_setup = self.script_setup_regex.captures(content)
+              let script_setup = self.script_setup_regex.captures(content)
             .map(|cap| SfcBlock {
                 content: cap.get(1).unwrap().as_str().to_string(),
             });
             
-        // Extract template section
-        let template = self.template_regex.captures(content)
+              let template = self.template_regex.captures(content)
             .map(|cap| SfcBlock {
                 content: cap.get(1).unwrap().as_str().to_string(),
             });
             
-        // Extract style sections
-        let styles = self.style_regex.captures_iter(content)
+              let styles = self.style_regex.captures_iter(content)
             .map(|cap| SfcBlock {
                 content: cap.get(1).unwrap().as_str().to_string(),
             })
@@ -116,8 +107,7 @@ impl VueParser {
         for cap in self.component_regex.captures_iter(content) {
             if let Some(component_name) = cap.get(1) {
                 let name = component_name.as_str();
-                // Skip HTML tags, focus on PascalCase components
-                if name.chars().next().unwrap_or('a').is_uppercase() {
+                              if name.chars().next().unwrap_or('a').is_uppercase() {
                     dependencies.push(Dependency {
                         issuer: issuer.to_string(),
                         request: format!("@/components/{}.vue", name),

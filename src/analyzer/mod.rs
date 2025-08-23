@@ -24,14 +24,11 @@ impl DependencyAnalyzer {
     }
     
     pub async fn analyze_files(&mut self, entries: &[String]) -> Result<(AnalysisResult, usize)> {
-        // Build dependency tree (now returns thread count too)
-        let (tree, num_threads) = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
+              let (tree, num_threads) = self.tree_builder.build_dependency_tree(entries, &self.options).await?;
         
-        // Find circular dependencies
-        let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
+              let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
         
-        // Convert entries to resolved paths (simplified for now)
-        let resolved_entries = entries.to_vec();
+              let resolved_entries = entries.to_vec();
         
         let result = AnalysisResult {
             entries: resolved_entries,
@@ -42,17 +39,13 @@ impl DependencyAnalyzer {
         Ok((result, num_threads))
     }
     
-    /// Incremental analysis for watch mode - only analyzes what changed
-    pub async fn analyze_files_incremental(&mut self, changed_files: &[String]) -> Result<(AnalysisResult, usize)> {
+        pub async fn analyze_files_incremental(&mut self, changed_files: &[String]) -> Result<(AnalysisResult, usize)> {
         
-        // Use incremental tree building for changed files
-        let (tree, num_threads) = self.tree_builder.build_dependency_tree_incremental(changed_files, &self.options).await?;
+              let (tree, num_threads) = self.tree_builder.build_dependency_tree_incremental(changed_files, &self.options).await?;
         
-        // Find circular dependencies
-        let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
+              let circulars = self.circular_analyzer.find_circular_dependencies(&tree, &self.options.skip_dynamic_imports, self.options.take);
         
-        // Convert entries to resolved paths (simplified for now)
-        let resolved_entries = changed_files.to_vec();
+              let resolved_entries = changed_files.to_vec();
         
         let result = AnalysisResult {
             entries: resolved_entries,
@@ -63,13 +56,11 @@ impl DependencyAnalyzer {
         Ok((result, num_threads))
     }
     
-    /// Get cache statistics from the tree builder
-    pub fn get_cache_stats(&self) -> CacheStats {
+        pub fn get_cache_stats(&self) -> CacheStats {
         self.tree_builder.get_cache_stats()
     }
     
-    /// Get incremental cache statistics (resets counters)
-    pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
+        pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
         self.tree_builder.get_incremental_cache_stats()
     }
     
