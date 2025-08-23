@@ -32,33 +32,55 @@ function getPlatformInfo() {
 
 function downloadBinary() {
   const { platform, arch, ext } = getPlatformInfo();
-  const binaryName = `rds${ext}`;
   const binDir = path.join(__dirname, "bin");
-  const binaryPath = path.join(binDir, binaryName);
+  const finalBinaryName = `rds${ext}`;
+  const finalBinaryPath = path.join(binDir, finalBinaryName);
 
   if (!fs.existsSync(binDir)) {
     fs.mkdirSync(binDir, { recursive: true });
   }
 
-  const localBinary = path.join(__dirname, "target", "release", binaryName);
-  if (fs.existsSync(localBinary)) {
-    console.log("📦 Using local binary...");
-    fs.copyFileSync(localBinary, binaryPath);
+  // 1) If there is a platform-specific prebuilt in bin/, prefer that.
+  const candidateNames = [
+    // exact platform-arch
+    `rds-${platform}-${arch}${ext}`,
+    `rds-${platform}${ext}`,
+    // generic name (fallback)
+    `rds${ext}`,
+  ];
 
-    if (process.platform !== "win32") {
-      fs.chmodSync(binaryPath, 0o755);
+  for (const name of candidateNames) {
+    const candidate = path.join(binDir, name);
+    if (fs.existsSync(candidate)) {
+      console.log(`📦 Using bundled binary: ${name}`);
+      fs.copyFileSync(candidate, finalBinaryPath);
+      if (process.platform !== "win32") {
+        fs.chmodSync(finalBinaryPath, 0o755);
+      }
+      console.log("✅ RDS binary installed successfully!");
+      return;
     }
+  }
 
+  // 2) If a local build exists in target/release, use that.
+  const localBinary = path.join(__dirname, "target", "release", `rds${ext}`);
+  if (fs.existsSync(localBinary)) {
+    console.log("📦 Using local build binary...");
+    fs.copyFileSync(localBinary, finalBinaryPath);
+    if (process.platform !== "win32") {
+      fs.chmodSync(finalBinaryPath, 0o755);
+    }
     console.log("✅ RDS binary installed successfully!");
     return;
   }
 
   // TODO: In a full implementation, download from GitHub releases
+  console.log(`📥 No matching binary found for ${platform}-${arch}`);
   console.log(
     `📥 Would download binary for ${platform}-${arch} from GitHub releases`,
   );
   console.log("⚠️  For now, please build locally with: cargo build --release");
-  console.log("    Then copy target/release/rds to bin/rds");
+  console.log("    Then copy target/release/rds to bin/rds (or bin/rds.exe on Windows)");
 }
 
 function main() {

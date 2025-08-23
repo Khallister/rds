@@ -1,0 +1,29 @@
+name: Verify hooks and formatting
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node deps (dev)
+        run: npm ci
+
+      - name: Check Husky installed
+        run: |
+          if [ -d .husky ]; then echo "husky hooks present"; else echo "husky hooks missing"; exit 1; fi
+
+      - name: Rust fmt check
+        run: |
+          cargo fmt -- --check
+
+      - name: Prettier check for test files
+        run: |
+          npx prettier --check "test/**" || true
