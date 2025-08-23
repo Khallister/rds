@@ -4,10 +4,11 @@
   "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
   "main": "index.js",
   "bin": {
-    "rds": "./bin/rds"
+    "rds": "./bin/rds.exe"
   },
   "scripts": {
     "postinstall": "node install.js",
+    "prepare": "husky install",
     "build": "cargo build --release",
     "test": "cargo test"
   },
@@ -38,7 +39,7 @@
   },
   "os": [
     "darwin",
-    "linux", 
+    "linux",
     "win32"
   ],
   "cpu": [
@@ -51,5 +52,18 @@
     "index.js",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "prettier": "^3.6.2",
+    "lint-staged": "^13.1.0"
+  },
+  "lint-staged": {
+    "**/*.rs": [
+      "cargo fmt --"
+    ],
+    "test/**/*.{js,ts,tsx,vue,json,md}": [
+      "prettier --write"
+    ]
+  }
 }
