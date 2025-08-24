@@ -198,8 +198,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Import GPG key (if provided)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true'
+      - name: Import GPG key (Linux/macOS)
+        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os != 'Windows'
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
             echo "$GPG_PRIVATE_KEY" > ./private.gpg
@@ -210,8 +210,21 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
-      - name: Sign artifacts (if GPG key present)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true'
+      - name: Import GPG key (Windows)
+        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:GPG_PRIVATE_KEY) {
+            $env:GPG_PRIVATE_KEY | Out-File -Encoding ascii ./private.gpg
+            gpg --batch --import ./private.gpg
+          } else {
+            Write-Output 'No GPG key provided; skipping import'
+          }
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Sign artifacts (Linux/macOS)
+        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os != 'Windows'
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
             for f in rds-*.tar.gz rds-*.zip; do
@@ -219,9 +232,37 @@ jobs:
                 gpg --batch --yes --detach-sign --armor -o "$f.asc" "$f"
               fi
             done
+            for s in rds-*.tar.gz.sha256 rds-*.zip.sha256; do
+              if [ -f "$s" ]; then
+                gpg --batch --yes --detach-sign --armor -o "$s.asc" "$s"
+              fi
+            done
           else
-            echo "No GPG key provided; skipping signing"
+            echo "No GPG key present; skipping signing"
           fi
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Sign artifacts (Windows)
+        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:GPG_PRIVATE_KEY) {
+            Get-ChildItem -Path . -Filter 'rds-*.tar.gz' -Name -ErrorAction SilentlyContinue | ForEach-Object {
+              $f = $_
+              if (Test-Path $f) { gpg --batch --yes --detach-sign --armor -o "$f.asc" $f }
+            }
+            Get-ChildItem -Path . -Filter 'rds-*.zip' -Name -ErrorAction SilentlyContinue | ForEach-Object {
+              $f = $_
+              if (Test-Path $f) { gpg --batch --yes --detach-sign --armor -o "$f.asc" $f }
+            }
+            Get-ChildItem -Path . -Filter 'rds-*.tar.gz.sha256' -Name -ErrorAction SilentlyContinue | ForEach-Object {
+              $s = $_
+              if (Test-Path $s) { gpg --batch --yes --detach-sign --armor -o "$s.asc" $s }
+            }
+          } else {
+            Write-Output 'No GPG key present; skipping signing'
+          }
 
       - name: Upload release assets (archive + checksum)
         if: startsWith(github.ref, 'refs/tags/')
