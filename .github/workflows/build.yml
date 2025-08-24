@@ -75,18 +75,19 @@ jobs:
               echo "Tag $TAG already exists and points at this commit ($TAG_COMMIT). Will run build against it."
               echo "tag_created=true" >> $GITHUB_OUTPUT
               echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
+              echo "commit_sha=$TAG_COMMIT" >> $GITHUB_OUTPUT
               exit 0
             fi
             echo "Tag $TAG already exists (points at $TAG_COMMIT), skipping creation."
             echo "tag_created=false" >> $GITHUB_OUTPUT
             echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "commit_sha=$TAG_COMMIT" >> $GITHUB_OUTPUT
             exit 0
           fi
-          echo "Creating and pushing tag $TAG (previous: $LATEST_TAG)"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY" "$TAG"
+          echo "Tag $TAG does not exist yet. Will not push from the runner so GitHub can sign it when the release is created."
           echo "tag_created=true" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+          echo "commit_sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
