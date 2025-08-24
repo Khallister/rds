@@ -16,10 +16,6 @@ jobs:
   create_tag_on_main:
     name: Create tag from package version (main)
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'main'
     outputs:
       tag_created: ${{ steps.create_tag.outputs.tag_created }}
       tag_name: ${{ steps.create_tag.outputs.tag_name }}
@@ -40,15 +36,52 @@ jobs:
           fi
           echo "version=$version"
 
-      - name: Create and push tag
+      - name: Create and push tag (only if version changed)
+        id: create_tag
         run: |
-          set -e
+          set -euo pipefail
+          # Decide if we should proceed: handle merged PRs and push-of-merge-commit to main
+          echo "Event: $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            pr_merged=$(jq -r .pull_request.merged < "$GITHUB_EVENT_PATH")
+            base_ref=$(jq -r .pull_request.base.ref < "$GITHUB_EVENT_PATH")
+            if [ "$pr_merged" != "true" ] || [ "$base_ref" != "main" ]; then
+              echo "Not a merged PR into main; skipping"
+              echo "tag_created=false" >> "$GITHUB_OUTPUT"
+              echo "tag_name=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "Not a push to main; skipping"
+              echo "tag_created=false" >> "$GITHUB_OUTPUT"
+              echo "tag_name=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            git fetch --no-tags --prune --depth=0 origin main || true
+            parent_count=$(git rev-list --parents -n 1 "$GITHUB_SHA" | awk '{print NF-1}')
+            if [ "$parent_count" -lt 2 ]; then
+              echo "Not a merge commit (parent_count=$parent_count); skipping"
+              echo "tag_created=false" >> "$GITHUB_OUTPUT"
+              echo "tag_name=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "Event $GITHUB_EVENT_NAME not handled; skipping"
+            echo "tag_created=false" >> "$GITHUB_OUTPUT"
+            echo "tag_name=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Read version and create tag if changed
           version=$(node -p "require('./package.json').version")
           if [ -z "$version" ]; then
             echo "error: package.json version is empty or could not be read"
+            echo "tag_created=false" >> "$GITHUB_OUTPUT"
+            echo "tag_name=" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          TAG="v${version}"
+          TAG="v$version"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch --tags
@@ -108,7 +141,6 @@ jobs:
           if [ "${{ runner.os }}" = "Linux" ]; then PLATFORM=linux; else PLATFORM=macos; fi
           ARCH_RAW=$(uname -m)
           case "$ARCH_RAW" in
-            x86_64) ARCH=x64 ;;
             aarch64|arm64) ARCH=arm64 ;;
             *) ARCH=$ARCH_RAW ;;
           esac
@@ -153,13 +185,13 @@ jobs:
             rds-*.tar.gz
             rds-*.zip
 
-      - name: Create GitHub Release (on tag)
+      - name: Create GitHub Release
         id: create_release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.create_tag_on_main.outputs.tag_created == 'true'
         uses: actions/create-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.create_tag_on_main.outputs.tag_name }}
+          release_name: ${{ needs.create_tag_on_main.outputs.tag_name }}
           body: 'Automated release artifacts'
           draft: true
           prerelease: false
@@ -167,7 +199,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Import GPG key (if provided)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.create_tag_on_main.outputs.tag_created == 'true'
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
             echo "$GPG_PRIVATE_KEY" > ./private.gpg
@@ -179,7 +211,7 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Sign artifacts (if GPG key present)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: needs.create_tag_on_main.outputs.tag_created == 'true'
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
             for f in rds-*.tar.gz rds-*.zip; do
