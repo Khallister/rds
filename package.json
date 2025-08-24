@@ -1,6 +1,6 @@
 {
   "name": "rds-analyzer",
-  "version": "0.4.5-alpha",
+  "version": "0.4.6-alpha",
   "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
   "main": "index.js",
   "bin": {
@@ -65,7 +65,8 @@
   },
   "lint-staged": {
     "**/*.rs": [
-      "cargo fmt --"
+  "cargo fmt --",
+  "cargo test --lib"
     ],
     "test/**/*.{js,ts,tsx,vue,json,md}": [
       "prettier --write"

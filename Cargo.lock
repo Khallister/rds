@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "rds"
-version = "0.4.5"
+version = "0.4.6"
 dependencies = [
  "anyhow",
  "atty",
@@ -691,6 +691,7 @@ dependencies = [
  "glob",
  "indicatif",
  "notify",
+ "once_cell",
  "pretty_assertions",
  "rayon",
  "regex",
@@ -698,6 +699,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]

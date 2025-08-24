@@ -7,7 +7,6 @@ mod analysis_runner;
 mod analyzer;
 mod cache;
 mod cli;
-mod config;
 mod filesystem;
 mod output;
 mod parser;
@@ -19,8 +18,10 @@ use anyhow::Result;
 
 use crate::analysis_runner::AnalysisRunner;
 use crate::cli::Cli;
+use crate::parser::{register_parser, JavaScriptParser, VueParser};
 use crate::utils::threading;
 use crate::watch::WatchRunner;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,6 +39,11 @@ async fn main() -> Result<()> {
     if cli.watch {
         WatchRunner::run_watch_mode(&cli).await
     } else {
+        // register built-in parsers so runtime registry is populated for plugins/tests
+        // Each parser advertises the extensions it handles; register them directly.
+        register_parser(Arc::new(JavaScriptParser::new()?));
+        register_parser(Arc::new(VueParser::new()?));
+
         AnalysisRunner::run_analysis_once(&cli).await
     }
 }

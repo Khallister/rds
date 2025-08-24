@@ -114,45 +114,4 @@ impl FileSystem {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_should_include_file_with_filter() {
-        let filter_extensions = Some(vec![".js".to_string(), ".ts".to_string()]);
-
-        assert!(FileSystem::should_include_file(
-            &PathBuf::from("test.js"),
-            &filter_extensions
-        ));
-
-        assert!(FileSystem::should_include_file(
-            &PathBuf::from("test.ts"),
-            &filter_extensions
-        ));
-
-        assert!(!FileSystem::should_include_file(
-            &PathBuf::from("test.vue"),
-            &filter_extensions
-        ));
-    }
-
-    #[test]
-    fn test_should_include_file_default() {
-        assert!(FileSystem::should_include_file(
-            &PathBuf::from("test.js"),
-            &None
-        ));
-
-        assert!(FileSystem::should_include_file(
-            &PathBuf::from("test.vue"),
-            &None
-        ));
-
-        assert!(!FileSystem::should_include_file(
-            &PathBuf::from("test.txt"),
-            &None
-        ));
-    }
-}
+mod tests;

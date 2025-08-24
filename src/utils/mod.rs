@@ -28,6 +28,8 @@ pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
     base
 }
 
+pub mod path;
+
 pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
     let mut changed_files = Vec::new();
 
@@ -76,7 +78,7 @@ pub mod config {
         options.js_extensions = cli.js.split(',').map(|s| s.to_string()).collect();
         options.include = regex::Regex::new(&cli.include)?;
         options.exclude = regex::Regex::new(&cli.exclude)?;
-        options.dependency_exclude = regex::Regex::new(r"node_modules|\.git|\.svn|\.hg")?;
+        options.dependency_exclude = regex::Regex::new(r"node_modules|\\.git|\\.svn|\\.hg")?;
         options.tsconfig = cli.tsconfig.clone();
         options.transform = cli.transform;
         options.take = cli.take;
@@ -163,28 +165,4 @@ pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_is_relevant_file_change() {
-        assert!(is_relevant_file_change(&PathBuf::from("test.js")));
-        assert!(is_relevant_file_change(&PathBuf::from("test.ts")));
-        assert!(is_relevant_file_change(&PathBuf::from("test.vue")));
-        assert!(!is_relevant_file_change(&PathBuf::from("test.txt")));
-        assert!(!is_relevant_file_change(&PathBuf::from("README.md")));
-    }
-
-    #[test]
-    fn test_handle_exit_codes_no_circulars() {
-        let result = exit_codes::handle_exit_codes("circular:1", &[]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_handle_exit_codes_invalid_format() {
-        let result = exit_codes::handle_exit_codes("invalid_format", &[]);
-        assert!(result.is_err());
-    }
-}
+mod tests;

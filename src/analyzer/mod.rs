@@ -1,12 +1,14 @@
 pub mod circular;
 pub mod tree;
-pub mod unused;
 
 use crate::cache::CacheStats;
 use crate::types::{AnalysisResult, ParseOptions};
 use anyhow::Result;
 use circular::CircularAnalyzer;
 use tree::TreeBuilder;
+
+#[cfg(test)]
+mod tests;
 
 pub struct DependencyAnalyzer {
     tree_builder: TreeBuilder,
