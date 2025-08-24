@@ -39,7 +39,6 @@ fn test_console_print_tree_captured_output() {
     assert!(s.contains("b.js"));
 }
 
-
 #[test]
 fn test_print_builtin_module_via_print_tree_to() {
     let out = ConsoleOutput::new();
@@ -55,11 +54,13 @@ fn test_print_builtin_module_via_print_tree_to() {
     assert!(s.contains("fs"));
 }
 
-
 #[test]
 fn test_print_circular_with_entries_and_limit() {
     let out = ConsoleOutput::new();
-    let circulars = vec![vec!["A".to_string(), "B".to_string()], vec!["C".to_string(), "D".to_string()]];
+    let circulars = vec![
+        vec!["A".to_string(), "B".to_string()],
+        vec!["C".to_string(), "D".to_string()],
+    ];
     // should print the circulars without panic
     out.print_circular(&circulars, Some(1), Some(1));
 }

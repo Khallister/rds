@@ -30,7 +30,15 @@ fn dependency_struct_serde_roundtrip() {
 #[test]
 fn dependency_tree_insert_and_get() {
     let mut tree: DependencyTree = DependencyTree::new();
-    tree.insert("x.js".to_string(), Some(vec![Dependency { issuer: "x.js".into(), request: "y.js".into(), kind: DependencyKind::StaticImport, id: None }]));
+    tree.insert(
+        "x.js".to_string(),
+        Some(vec![Dependency {
+            issuer: "x.js".into(),
+            request: "y.js".into(),
+            kind: DependencyKind::StaticImport,
+            id: None,
+        }]),
+    );
     assert!(tree.contains_key("x.js"));
     let val = tree.get("x.js").unwrap();
     assert!(val.is_some());
@@ -52,7 +60,10 @@ fn parse_options_debug_and_enums() {
     assert!(s.contains("extensions"));
 
     // SkipDynamicImports variants roundtrip via equality
-    assert_eq!(crate::types::config::SkipDynamicImports::Never, crate::types::config::SkipDynamicImports::Never);
+    assert_eq!(
+        crate::types::config::SkipDynamicImports::Never,
+        crate::types::config::SkipDynamicImports::Never
+    );
 
     // ProgressEvent debug
     let ev = crate::types::config::ProgressEvent::Start;

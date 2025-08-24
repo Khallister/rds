@@ -1,9 +1,9 @@
 use super::*;
 use crate::types::DependencyTree;
 use crate::types::{AnalysisResult, Dependency, DependencyKind};
+use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::tempdir;
-use std::path::PathBuf;
 
 #[test]
 fn test_count_total_dependencies() {
@@ -22,7 +22,6 @@ fn test_print_circular_dependencies_empty() {
     });
     assert!(res.is_ok());
 }
-
 
 #[tokio::test]
 async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Result<()> {
@@ -76,7 +75,8 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
     };
 
     // call the private display function directly
-    AnalysisRunner::display_analysis_results(&result, &entries, Duration::from_millis(10), 1, &cli).await?;
+    AnalysisRunner::display_analysis_results(&result, &entries, Duration::from_millis(10), 1, &cli)
+        .await?;
 
     // ensure JSON file exists and contains the expected structure
     let s = std::fs::read_to_string(&out_path)?;
@@ -85,7 +85,6 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result<()> {
@@ -120,7 +119,6 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
     let _ = res;
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Result<()> {
@@ -162,7 +160,6 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Result<()> {
@@ -247,11 +244,17 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         threads: None,
     };
 
-    AnalysisRunner::display_analysis_results(&result, &entries, std::time::Duration::from_secs(0), 1, &cli).await?;
+    AnalysisRunner::display_analysis_results(
+        &result,
+        &entries,
+        std::time::Duration::from_secs(0),
+        1,
+        &cli,
+    )
+    .await?;
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<()> {

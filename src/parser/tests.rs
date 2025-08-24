@@ -153,5 +153,7 @@ fn test_register_parser_uses_handled_extensions_and_lookup() {
 
     let p = p_opt.unwrap();
     let deps = p.parse_file("/some/file.bar", "").unwrap();
-    assert!(deps.iter().any(|d| d.request.contains("toydep2") || d.issuer == "toy2"));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.contains("toydep2") || d.issuer == "toy2"));
 }

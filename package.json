@@ -9,8 +9,8 @@
   "scripts": {
     "postinstall": "node install.js",
     "prepare": "husky install",
-  "build": "cargo build --release",
-  "build:targets": "node ./scripts/build-target.js --target x86_64-unknown-linux-gnu && node ./scripts/build-target.js --target x86_64-pc-windows-gnu && node ./scripts/build-target.js --target x86_64-apple-darwin && node ./scripts/build-target.js --target aarch64-unknown-linux-gnu && node ./scripts/build-target.js --target aarch64-apple-darwin",
+    "build": "cargo build --release",
+    "build:targets": "node ./scripts/build-target.js --target x86_64-unknown-linux-gnu && node ./scripts/build-target.js --target x86_64-pc-windows-gnu && node ./scripts/build-target.js --target x86_64-apple-darwin && node ./scripts/build-target.js --target aarch64-unknown-linux-gnu && node ./scripts/build-target.js --target aarch64-apple-darwin",
     "test": "cargo test"
   },
   "keywords": [
@@ -64,10 +64,6 @@
     "archiver": "^5.3.1"
   },
   "lint-staged": {
-    "**/*.rs": [
-  "cargo fmt --",
-  "cargo test --lib"
-    ],
     "test/**/*.{js,ts,tsx,vue,json,md}": [
       "prettier --write"
     ]

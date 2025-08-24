@@ -1,8 +1,8 @@
 use super::*;
-use crate::types::DependencyTree;
 use crate::analyzer::DependencyAnalyzer;
-use crate::types::ParseOptions;
 use crate::cli::Cli;
+use crate::types::DependencyTree;
+use crate::types::ParseOptions;
 
 #[tokio::test]
 async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<()> {

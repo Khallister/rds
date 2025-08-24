@@ -1,26 +1,26 @@
 use super::ModuleResolver;
 use anyhow::Result;
-use tempfile::tempdir;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+use tempfile::tempdir;
 
 #[tokio::test]
 async fn test_resolve_ts_alias_wildcard_and_exact() -> Result<()> {
-        let td = tempdir()?;
-        let project = td.path();
+    let td = tempdir()?;
+    let project = td.path();
 
-        // create src/utils/foo.js which should be matched by @/* -> ./src/*
-        let src_utils = project.join("src").join("utils");
-        fs::create_dir_all(&src_utils)?;
-        fs::write(src_utils.join("foo.js"), "module.exports = {};" )?;
+    // create src/utils/foo.js which should be matched by @/* -> ./src/*
+    let src_utils = project.join("src").join("utils");
+    fs::create_dir_all(&src_utils)?;
+    fs::write(src_utils.join("foo.js"), "module.exports = {};")?;
 
-        // create lib/alias.js for exact mapping
-        let lib_dir = project.join("lib");
-        fs::create_dir_all(&lib_dir)?;
-        fs::write(lib_dir.join("alias.js"), "module.exports = {};" )?;
+    // create lib/alias.js for exact mapping
+    let lib_dir = project.join("lib");
+    fs::create_dir_all(&lib_dir)?;
+    fs::write(lib_dir.join("alias.js"), "module.exports = {};")?;
 
-        // write tsconfig.json with wildcard and exact mappings
-        let tsconfig = r#"
+    // write tsconfig.json with wildcard and exact mappings
+    let tsconfig = r#"
         {
             "compilerOptions": {
                 "baseUrl": ".",
@@ -32,27 +32,27 @@ async fn test_resolve_ts_alias_wildcard_and_exact() -> Result<()> {
         }
         "#;
 
-        fs::write(project.join("tsconfig.json"), tsconfig)?;
+    fs::write(project.join("tsconfig.json"), tsconfig)?;
 
-        let r = ModuleResolver::new();
+    let r = ModuleResolver::new();
 
-        // wildcard alias
-        let resolved = r
-                .resolve_module(project, "@/utils/foo", &vec![".js".to_string()])
-                .await?;
-        assert!(resolved.is_some());
-        let rr = resolved.unwrap();
-        assert!(rr.ends_with("src/utils/foo.js") || rr.ends_with("src\\utils\\foo.js"));
+    // wildcard alias
+    let resolved = r
+        .resolve_module(project, "@/utils/foo", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved.is_some());
+    let rr = resolved.unwrap();
+    assert!(rr.ends_with("src/utils/foo.js") || rr.ends_with("src\\utils\\foo.js"));
 
-        // exact alias
-        let resolved2 = r
-                .resolve_module(project, "plain-alias", &vec![".js".to_string()])
-                .await?;
-        assert!(resolved2.is_some());
-        let rr2 = resolved2.unwrap();
-        assert!(rr2.ends_with("lib/alias.js") || rr2.ends_with("lib\\alias.js"));
+    // exact alias
+    let resolved2 = r
+        .resolve_module(project, "plain-alias", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved2.is_some());
+    let rr2 = resolved2.unwrap();
+    assert!(rr2.ends_with("lib/alias.js") || rr2.ends_with("lib\\alias.js"));
 
-        Ok(())
+    Ok(())
 }
 
 #[test]
@@ -71,7 +71,9 @@ async fn test_resolve_module_builtin_and_append_suffix() -> Result<()> {
     let r = ModuleResolver::new();
 
     // builtin module should return as-is
-    let res = r.resolve_module(".", "fs", &vec![".js".to_string()]).await?;
+    let res = r
+        .resolve_module(".", "fs", &vec![".js".to_string()])
+        .await?;
     assert_eq!(res.unwrap(), "fs");
 
     // create temp dir and file to test append_suffix
@@ -87,15 +89,15 @@ async fn test_resolve_module_builtin_and_append_suffix() -> Result<()> {
 
 #[tokio::test]
 async fn test_resolve_ts_alias_nested_baseurl() -> Result<()> {
-        let td = tempdir()?;
-        let project = td.path();
+    let td = tempdir()?;
+    let project = td.path();
 
-        // create sub/base/file.js to be resolved by pattern '@/nested/*' -> './sub/base/*'
-        let target = project.join("sub").join("base");
-        fs::create_dir_all(&target)?;
-        fs::write(target.join("file.js"), "module.exports = {};" )?;
+    // create sub/base/file.js to be resolved by pattern '@/nested/*' -> './sub/base/*'
+    let target = project.join("sub").join("base");
+    fs::create_dir_all(&target)?;
+    fs::write(target.join("file.js"), "module.exports = {};")?;
 
-        let tsconfig = r#"
+    let tsconfig = r#"
         {
             "compilerOptions": {
                 "baseUrl": ".",
@@ -105,29 +107,29 @@ async fn test_resolve_ts_alias_nested_baseurl() -> Result<()> {
             }
         }
         "#;
-        fs::write(project.join("tsconfig.json"), tsconfig)?;
+    fs::write(project.join("tsconfig.json"), tsconfig)?;
 
-        let r = ModuleResolver::new();
-        let resolved = r
-                .resolve_module(project, "@/nested/file", &vec![".js".to_string()])
-                .await?;
-        assert!(resolved.is_some());
-        let rr = resolved.unwrap();
-        assert!(rr.ends_with("sub/base/file.js") || rr.ends_with("sub\\base\\file.js"));
-        Ok(())
+    let r = ModuleResolver::new();
+    let resolved = r
+        .resolve_module(project, "@/nested/file", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved.is_some());
+    let rr = resolved.unwrap();
+    assert!(rr.ends_with("sub/base/file.js") || rr.ends_with("sub\\base\\file.js"));
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_resolve_ts_alias_multiple_targets_fallback() -> Result<()> {
-        let td = tempdir()?;
-        let project = td.path();
+    let td = tempdir()?;
+    let project = td.path();
 
-        // create second target present, first target missing
-        let present = project.join("src_present");
-        fs::create_dir_all(&present)?;
-        fs::write(present.join("file.js"), "module.exports = {};" )?;
+    // create second target present, first target missing
+    let present = project.join("src_present");
+    fs::create_dir_all(&present)?;
+    fs::write(present.join("file.js"), "module.exports = {};")?;
 
-        let tsconfig = r#"
+    let tsconfig = r#"
         {
             "compilerOptions": {
                 "baseUrl": ".",
@@ -137,32 +139,33 @@ async fn test_resolve_ts_alias_multiple_targets_fallback() -> Result<()> {
             }
         }
         "#;
-        fs::write(project.join("tsconfig.json"), tsconfig)?;
+    fs::write(project.join("tsconfig.json"), tsconfig)?;
 
-        let r = ModuleResolver::new();
-        let resolved = r
-                .resolve_module(project, "@/multi/file", &vec![".js".to_string()])
-                .await?;
-        assert!(resolved.is_some());
-        let rr = resolved.unwrap();
-        assert!(rr.ends_with("src_present/file.js") || rr.ends_with("src_present\\file.js"));
-        Ok(())
+    let r = ModuleResolver::new();
+    let resolved = r
+        .resolve_module(project, "@/multi/file", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved.is_some());
+    let rr = resolved.unwrap();
+    assert!(rr.ends_with("src_present/file.js") || rr.ends_with("src_present\\file.js"));
+    Ok(())
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn test_resolve_ts_alias_leading_slash_target_unix() -> Result<()> {
-        let td = tempdir()?;
-        let project = td.path();
+    let td = tempdir()?;
+    let project = td.path();
 
-        // create an absolute directory and file that will be referenced with a leading-slash target
-        let abs = project.join("abs_target");
-        fs::create_dir_all(&abs)?;
-        fs::write(abs.join("a.js"), "module.exports = {};" )?;
+    // create an absolute directory and file that will be referenced with a leading-slash target
+    let abs = project.join("abs_target");
+    fs::create_dir_all(&abs)?;
+    fs::write(abs.join("a.js"), "module.exports = {};")?;
 
-        // on unix the absolute path starts with '/'
-        let abs_path = abs.to_string_lossy().to_string();
-        let tsconfig = format!(r#"
+    // on unix the absolute path starts with '/'
+    let abs_path = abs.to_string_lossy().to_string();
+    let tsconfig = format!(
+        r#"
         {{
             "compilerOptions": {{
                 "baseUrl": ".",
@@ -171,19 +174,21 @@ async fn test_resolve_ts_alias_leading_slash_target_unix() -> Result<()> {
                 }}
             }}
         }}
-        "#, abs_path);
+        "#,
+        abs_path
+    );
 
-        fs::write(project.join("tsconfig.json"), tsconfig)?;
+    fs::write(project.join("tsconfig.json"), tsconfig)?;
 
-        let r = ModuleResolver::new();
-        let request = format!("abs/a");
-        let resolved = r
-                .resolve_module(project, &request, &vec![".js".to_string()])
-                .await?;
-        assert!(resolved.is_some());
-        let rr = resolved.unwrap();
-        assert!(rr.ends_with("abs_target/a.js") || rr.ends_with("abs_target\\a.js"));
-        Ok(())
+    let r = ModuleResolver::new();
+    let request = format!("abs/a");
+    let resolved = r
+        .resolve_module(project, &request, &vec![".js".to_string()])
+        .await?;
+    assert!(resolved.is_some());
+    let rr = resolved.unwrap();
+    assert!(rr.ends_with("abs_target/a.js") || rr.ends_with("abs_target\\a.js"));
+    Ok(())
 }
 
 #[tokio::test]
@@ -210,7 +215,7 @@ async fn test_append_suffix_directory_index_resolution() -> Result<()> {
     let dir = td.path().join("mydir");
     std::fs::create_dir_all(&dir)?;
     // create index.js inside the directory
-    std::fs::write(dir.join("index.js"), "module.exports = {};" )?;
+    std::fs::write(dir.join("index.js"), "module.exports = {};")?;
 
     let r = ModuleResolver::new();
     let req = dir.to_string_lossy().to_string();
@@ -227,7 +232,7 @@ async fn test_resolve_relative_request_in_context() -> Result<()> {
     let project = td.path();
     let sub = project.join("sub");
     std::fs::create_dir_all(&sub)?;
-    std::fs::write(sub.join("file.js"), "module.exports = {};" )?;
+    std::fs::write(sub.join("file.js"), "module.exports = {};")?;
 
     let r = ModuleResolver::new();
     let resolved = r
@@ -266,7 +271,9 @@ async fn test_append_suffix_try_extensions() -> Result<()> {
 
     let r = ModuleResolver::new();
     let req = file_base.to_string_lossy().to_string();
-    let resolved = r.append_suffix(&req, &vec![".ts".to_string(), ".js".to_string()]).await?;
+    let resolved = r
+        .append_suffix(&req, &vec![".ts".to_string(), ".js".to_string()])
+        .await?;
     assert!(resolved.is_some());
     Ok(())
 }

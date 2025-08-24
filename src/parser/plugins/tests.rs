@@ -22,10 +22,18 @@ fn test_parse_imports_and_requires_and_exports() {
     "#;
 
     let deps = p.parse_file("/tmp/a.js", content).unwrap();
-    assert!(deps.iter().any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::StaticImport));
-    assert!(deps.iter().any(|d| d.request.ends_with("./c.js") && d.kind == DependencyKind::CommonJS));
-    assert!(deps.iter().any(|d| d.request.ends_with("./d.js") && d.kind == DependencyKind::DynamicImport));
-    assert!(deps.iter().any(|d| d.request.ends_with("./e.js") && d.kind == DependencyKind::StaticExport));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::StaticImport));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./c.js") && d.kind == DependencyKind::CommonJS));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./d.js") && d.kind == DependencyKind::DynamicImport));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./e.js") && d.kind == DependencyKind::StaticExport));
 }
 
 #[test]
@@ -40,7 +48,12 @@ fn test_parse_ignores_commented_imports() {
 
     let deps = p.parse_file("/tmp/a.js", content).unwrap();
     // only one real import should be found
-    assert_eq!(deps.iter().filter(|d| d.request.ends_with("./real.js")).count(), 1);
+    assert_eq!(
+        deps.iter()
+            .filter(|d| d.request.ends_with("./real.js"))
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -63,8 +76,12 @@ fn test_parse_vue_script_and_setup() {
     "#;
 
     let deps = p.parse_file("/tmp/comp.vue", content).unwrap();
-    assert!(deps.iter().any(|d| d.request.ends_with("./a.js") && d.kind == DependencyKind::VueScript));
-    assert!(deps.iter().any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::VueScript));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./a.js") && d.kind == DependencyKind::VueScript));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::VueScript));
 }
 
 #[test]
@@ -81,8 +98,13 @@ fn test_parse_vue_template_components() {
 
     let deps = p.parse_file("/tmp/comp.vue", content).unwrap();
     // only the PascalCase component should be picked up
-    assert!(deps.iter().any(|d| d.request.ends_with("@/components/MyComponent.vue") && d.kind == DependencyKind::VueTemplate));
-    assert!(!deps.iter().any(|d| d.request.contains("lowercase") && d.kind == DependencyKind::VueTemplate));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("@/components/MyComponent.vue")
+            && d.kind == DependencyKind::VueTemplate));
+    assert!(!deps
+        .iter()
+        .any(|d| d.request.contains("lowercase") && d.kind == DependencyKind::VueTemplate));
 }
 
 #[test]
@@ -96,8 +118,12 @@ fn test_parse_vue_style_imports() {
     "#;
 
     let deps = p.parse_file("/tmp/comp.vue", content).unwrap();
-    assert!(deps.iter().any(|d| d.request.ends_with("./styles/a.css") && d.kind == DependencyKind::VueStyle));
-    assert!(deps.iter().any(|d| d.request.ends_with("./styles/b.scss") && d.kind == DependencyKind::VueStyle));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./styles/a.css") && d.kind == DependencyKind::VueStyle));
+    assert!(deps
+        .iter()
+        .any(|d| d.request.ends_with("./styles/b.scss") && d.kind == DependencyKind::VueStyle));
 }
 
 #[test]

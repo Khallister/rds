@@ -28,7 +28,6 @@ async fn test_build_dependency_tree_basic() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_parse_file_static_excluded_returns_none() -> anyhow::Result<()> {
     let mut opts = crate::types::config::ParseOptions::default();
@@ -41,7 +40,6 @@ async fn test_parse_file_static_excluded_returns_none() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_parse_single_file_deps_excluded_inserts_none() -> anyhow::Result<()> {
@@ -61,11 +59,13 @@ async fn test_parse_single_file_deps_excluded_inserts_none() -> anyhow::Result<(
     .await?;
 
     assert!(tree.keys().any(|k| k.ends_with("exclude_me.js")));
-    assert!(tree.get("exclude_me.js").map(|v| v.is_none()).unwrap_or(false));
+    assert!(tree
+        .get("exclude_me.js")
+        .map(|v| v.is_none())
+        .unwrap_or(false));
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_parse_single_file_deps_no_parser_inserts_empty() -> anyhow::Result<()> {
@@ -91,7 +91,6 @@ async fn test_parse_single_file_deps_no_parser_inserts_empty() -> anyhow::Result
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_process_parsed_results_error_propagates() -> anyhow::Result<()> {
@@ -122,7 +121,6 @@ async fn test_process_parsed_results_error_propagates() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_process_parsed_results_caches_when_enabled() -> anyhow::Result<()> {
     let mut cache = crate::cache::FileCache::new(true);
@@ -140,7 +138,7 @@ async fn test_process_parsed_results_caches_when_enabled() -> anyhow::Result<()>
         id: None,
     };
 
-    let parsed_results = vec![Ok((f_path.clone(), Some(vec![dep])))] ;
+    let parsed_results = vec![Ok((f_path.clone(), Some(vec![dep])))];
 
     let mut tree: crate::types::DependencyTree = crate::types::DependencyTree::new();
     let mut processed_files = std::collections::HashSet::new();
@@ -167,7 +165,6 @@ async fn test_process_parsed_results_caches_when_enabled() -> anyhow::Result<()>
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_build_dependency_tree_incremental_cache_reuse() -> anyhow::Result<()> {
     let mut builder = TreeBuilder::new()?;
@@ -185,16 +182,19 @@ async fn test_build_dependency_tree_incremental_cache_reuse() -> anyhow::Result<
     options.cache_enabled = true;
 
     // run incremental once to populate last_analysis_cache
-    let (_, _threads) = builder.build_dependency_tree_incremental(&entries, &options).await?;
+    let (_, _threads) = builder
+        .build_dependency_tree_incremental(&entries, &options)
+        .await?;
     let key = crate::utils::path::normalize_path_for_storage(&entries[0])?;
 
     // run incremental again with the same single file; since nothing changed it should reuse cached tree
-    let (inc_tree, _threads) = builder.build_dependency_tree_incremental(&entries, &options).await?;
+    let (inc_tree, _threads) = builder
+        .build_dependency_tree_incremental(&entries, &options)
+        .await?;
     assert!(inc_tree.contains_key(&key));
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_build_dependency_tree_with_cached_results_resolves_deps() -> anyhow::Result<()> {
@@ -303,7 +303,6 @@ fn test_expand_entries_directory_and_glob() -> Result<()> {
     Ok(())
 }
 
-
 #[test]
 fn test_expand_entries_missing_push_entry() -> Result<()> {
     let mut opts = crate::types::config::ParseOptions::default();
@@ -316,7 +315,6 @@ fn test_expand_entries_missing_push_entry() -> Result<()> {
 
     Ok(())
 }
-
 
 #[test]
 fn test_expand_entries_with_relative_context_uses_cwd() -> Result<()> {
@@ -332,7 +330,6 @@ fn test_expand_entries_with_relative_context_uses_cwd() -> Result<()> {
 
     Ok(())
 }
-
 
 #[test]
 fn test_expand_entries_glob_dir_scans_directory() -> Result<()> {
@@ -406,7 +403,6 @@ fn test_expand_entries_excludes_node_modules() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::test]
 async fn test_parse_file_static_no_parser_returns_empty_deps() -> anyhow::Result<()> {
     let opts = crate::types::config::ParseOptions::default();
@@ -419,7 +415,6 @@ async fn test_parse_file_static_no_parser_returns_empty_deps() -> anyhow::Result
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_parse_files_batch_error_when_read_fails() -> anyhow::Result<()> {
@@ -443,7 +438,12 @@ async fn test_parse_files_batch_error_when_read_fails() -> anyhow::Result<()> {
     crate::parser::register_parser_for_extensions(vec!["err"], Arc::new(ToyParser));
 
     let opts = crate::types::config::ParseOptions::default();
-    let results = crate::analyzer::tree::parse::parse_files_batch(vec!["missing_file.err".to_string()], &opts, 2).await;
+    let results = crate::analyzer::tree::parse::parse_files_batch(
+        vec!["missing_file.err".to_string()],
+        &opts,
+        2,
+    )
+    .await;
 
     assert_eq!(results.len(), 1);
     match &results[0] {
@@ -453,7 +453,6 @@ async fn test_parse_files_batch_error_when_read_fails() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_process_parsed_results_resolves_deps() -> anyhow::Result<()> {
@@ -476,7 +475,7 @@ async fn test_process_parsed_results_resolves_deps() -> anyhow::Result<()> {
         id: None,
     };
 
-    let parsed_results = vec![Ok((a_path.clone(), Some(vec![dep])))] ;
+    let parsed_results = vec![Ok((a_path.clone(), Some(vec![dep])))];
 
     let mut tree: crate::types::DependencyTree = crate::types::DependencyTree::new();
     let mut processed_files = std::collections::HashSet::new();

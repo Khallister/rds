@@ -1,7 +1,7 @@
 use super::*;
-use std::path::PathBuf;
 use crate::cli::Cli;
 use notify::EventKind;
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
 #[test]

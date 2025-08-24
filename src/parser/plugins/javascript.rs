@@ -16,12 +16,21 @@ impl JavaScriptParser {
             import_regex: Regex::new(r#"import\s+(?:[^'"\n]+\s+from\s+)?['"]([^'\"]+)['"]"#)?,
             require_regex: Regex::new(r#"require\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"#)?,
             dynamic_import_regex: Regex::new(r#"import\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"#)?,
-            export_from_regex: Regex::new(r#"export\s+(?:[^'"\n]+\s+)?from\s+['\"]([^'\"]+)['\"]"#)?,
+            export_from_regex: Regex::new(
+                r#"export\s+(?:[^'"\n]+\s+)?from\s+['\"]([^'\"]+)['\"]"#,
+            )?,
         })
     }
 
     pub fn handled_extensions(&self) -> Vec<String> {
-        vec!["js".to_string(), "mjs".to_string(), "cjs".to_string(), "jsx".to_string(), "ts".to_string(), "tsx".to_string()]
+        vec![
+            "js".to_string(),
+            "mjs".to_string(),
+            "cjs".to_string(),
+            "jsx".to_string(),
+            "ts".to_string(),
+            "tsx".to_string(),
+        ]
     }
 
     pub fn parse_file<P: AsRef<Path>>(
@@ -131,7 +140,8 @@ impl JavaScriptParser {
                             // `import(` or `require(` (with optional space), we assume
                             // it's a module specifier and keep the inner text unchanged.
                             let lookback_len = 50usize;
-                            let tail_chars: String = result.chars().rev().take(lookback_len).collect();
+                            let tail_chars: String =
+                                result.chars().rev().take(lookback_len).collect();
                             let tail: String = tail_chars.chars().rev().collect();
 
                             // normalize some spacing for simple suffix checks
