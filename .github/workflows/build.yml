@@ -32,7 +32,13 @@ jobs:
       - name: Read package.json version
         id: version
         run: |
-          echo "version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+          version=$(node -p "require('./package.json').version")
+          echo "detected version: '$version'"
+          if [ -z "$version" ]; then
+            echo "error: package.json version is empty or could not be read"
+            exit 1
+          fi
+          echo "version=$version"
 
       - name: Create and push tag (only if version changed)
         id: create_tag
