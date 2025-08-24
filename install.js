@@ -8,6 +8,7 @@ const { spawnSync } = require("child_process");
 const VERSION = require("./package.json").version;
 const argv = require('minimist')(process.argv.slice(2));
 const CLI_TOKEN = argv.token || argv.t || null;
+const DEBUG = argv.debug || argv.d || false;
 
 function getPlatformInfo() {
   const p = process.platform;
@@ -23,9 +24,9 @@ function getPlatformInfo() {
 
 function ghGetJson(pathname) {
   const headers = { "user-agent": "rds-installer" };
-  if (CLI_TOKEN) headers.authorization = `token ${CLI_TOKEN}`;
+  if (CLI_TOKEN) headers.authorization = `Bearer ${CLI_TOKEN}`;
   else if (process.env.GITHUB_TOKEN)
-    headers.authorization = `token ${process.env.GITHUB_TOKEN}`;
+    headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const opts = {
     hostname: "api.github.com",
     path: pathname,
@@ -40,7 +41,7 @@ function ghGetJson(pathname) {
       res.on("end", () => {
         try {
           if (res.statusCode >= 400) {
-                if (process.env.RDS_DEBUG) {
+                if (DEBUG) {
                   console.error(
                     `[rds-installer] GitHub API ${pathname} returned HTTP ${res.statusCode}`
                   );
@@ -50,7 +51,7 @@ function ghGetJson(pathname) {
               }
           resolve(JSON.parse(body));
         } catch (err) {
-          if (process.env.RDS_DEBUG)
+          if (DEBUG)
             console.error(
               "[rds-installer] JSON parse error for",
               pathname,
@@ -73,25 +74,37 @@ async function fetchReleaseInfo(version) {
     candidates.push(`v${version}`);
   }
   for (const tag of candidates) {
-    if (process.env.RDS_DEBUG)
+    if (DEBUG)
       console.log(`[rds-installer] Looking up release by tag: ${tag}`);
     const byTag = await ghGetJson(`/repos/Khallister/rds/releases/tags/${tag}`);
     if (byTag && byTag.tag_name) return byTag;
   }
-  if (process.env.RDS_DEBUG)
-    console.log("[rds-installer] Tag lookups failed, trying latest");
+  if (DEBUG) console.log('[rds-installer] Tag lookups exhausted');
+  if (DEBUG)
+      console.log("[rds-installer] Tag lookups failed, trying latest");
   const latest = await ghGetJson("/repos/Khallister/rds/releases/latest");
-  if (!latest && process.env.RDS_DEBUG)
+  if (DEBUG && latest) {
+    try {
+      console.log('[rds-installer] Latest release found:', latest.tag_name);
+      if (Array.isArray(latest.assets)) console.log('[rds-installer] latest.assets:', latest.assets.map(a=>a.name));
+    } catch (e) {
+      if (DEBUG) console.error('[rds-installer] error logging latest release', e);
+    }
+  }
+  if (!latest && DEBUG)
     console.log("[rds-installer] Latest release lookup failed");
   return latest && latest.tag_name ? latest : null;
 }
 
 function findAssetForRelease(release, candidates) {
   if (!release || !Array.isArray(release.assets)) return null;
+  if (DEBUG) console.log('[rds-installer] release.assets:', release.assets.map(a=>a.name));
   for (const name of candidates) {
+    if (DEBUG) console.log(`[rds-installer] looking for asset name: ${name}`);
     const a = release.assets.find((x) => x.name === name);
     if (a) return a;
   }
+  if (DEBUG) console.log('[rds-installer] no matching assets found for candidates:', candidates);
   return null;
 }
 
@@ -111,7 +124,7 @@ function downloadToFile(url, dest, headers = {}) {
         try {
           fs.unlinkSync(dest);
         } catch (e) {
-          if (process.env.RDS_DEBUG) console.error(e);
+            if (DEBUG) console.error(e);
         }
         reject(err);
       });
@@ -124,7 +137,7 @@ function programExists(cmd) {
     const r = spawnSync(which, [cmd], { stdio: "ignore" });
     return r.status === 0;
   } catch (e) {
-    if (process.env.RDS_DEBUG) console.error(e);
+    if (DEBUG) console.error(e);
     return false;
   }
 }
@@ -148,7 +161,7 @@ function extractArchive(archivePath, destDir) {
 function _authHeaders() {
   const headers = { "user-agent": "rds-installer" };
   const token = CLI_TOKEN || process.env.GITHUB_TOKEN;
-  if (token) headers.authorization = `token ${token}`;
+  if (token) headers.authorization = `Bearer ${token}`;
   return headers;
 }
 
@@ -168,7 +181,7 @@ async function downloadAndExtractArchive(asset, binDir, ext) {
   try {
     fs.unlinkSync(tmpName);
   } catch (e) {
-    if (process.env.RDS_DEBUG) console.error(e);
+    if (DEBUG) console.error(e);
   }
   return true;
 }
