@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Husky pre-commit hook: run lint-staged (which runs formatters on staged files)
+# Husky pre-commit hook: run lint-staged (formatters) and abort on failure
 echo "🔧 Running lint-staged..."
 
 if command -v npx >/dev/null 2>&1; then
@@ -13,4 +13,11 @@ else
   exit 1
 fi
 
+status=$?
+if [ $status -ne 0 ]; then
+  echo "❌ lint-staged failed (status $status). Aborting commit." >&2
+  exit $status
+fi
+
+# success — allow commit to proceed (tests are run on pre-push)
 exit 0
