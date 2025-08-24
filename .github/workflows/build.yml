@@ -40,9 +40,14 @@ jobs:
         run: |
           BIN=target/release/rds
           chmod +x "$BIN" || true
-          # Normalize platform name
           if [ "${{ runner.os }}" = "Linux" ]; then PLATFORM=linux; else PLATFORM=macos; fi
-          ARCHIVE_NAME="rds-${PLATFORM}-x64.tar.gz"
+          ARCH_RAW=$(uname -m)
+          case "$ARCH_RAW" in
+            x86_64) ARCH=x64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) ARCH=$ARCH_RAW ;;
+          esac
+          ARCHIVE_NAME="rds-${PLATFORM}-${ARCH}.tar.gz"
           tar -czf "$ARCHIVE_NAME" -C target/release $(basename "$BIN")
           sha256sum "$ARCHIVE_NAME" | awk '{print $1 "  " $2}' > "${ARCHIVE_NAME}.sha256"
 
@@ -51,10 +56,29 @@ jobs:
         shell: powershell
         run: |
           $bin = 'target\release\rds.exe'
-          $archive = 'rds-windows-x64.zip'
-          if (Test-Path $bin) { Compress-Archive -Path $bin -DestinationPath $archive }
-          $hash = Get-FileHash $archive -Algorithm SHA256
-          $hash.Hash + '  ' + $archive | Out-File ($archive + '.sha256') -Encoding ascii
+          if (Test-Path $bin) {
+            $proc = $env:PROCESSOR_ARCHITECTURE
+            if ($proc -eq 'AMD64') { $arch = 'x64' }
+            elseif ($proc -match 'ARM') { $arch = 'arm64' }
+            else { $arch = $proc }
+            $archive = "rds-windows-$arch.zip"
+            Compress-Archive -Path $bin -DestinationPath $archive
+            $hash = Get-FileHash $archive -Algorithm SHA256
+            $hash.Hash + '  ' + $archive | Out-File ($archive + '.sha256') -Encoding ascii
+          }
+
+      - name: Verify packaged artifacts exist
+        if: matrix.os != 'windows-latest'
+        run: |
+          set -e
+          shopt -s nullglob || true
+          files=(rds-*.tar.gz rds-*.zip)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No packaged artifacts found for ${{ matrix.os }}"
+            exit 1
+          else
+            echo "Found artifacts: ${files[*]}"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
