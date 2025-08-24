@@ -87,14 +87,23 @@ jobs:
           git fetch --tags
           LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
           if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" = "$TAG" ]; then
-            echo "No version change detected (latest tag: $LATEST_TAG). Skipping tag creation."
+            # Tag exists. If it already points at the commit we're about to release, treat as created.
+            TAG_COMMIT=$(git rev-parse --verify "$TAG^{}" 2>/dev/null || true)
+            if [ "$TAG_COMMIT" = "$GITHUB_SHA" ]; then
+              echo "Tag $TAG already exists and points at this commit ($TAG_COMMIT). Will run build against it."
+              echo "tag_created=true" >> $GITHUB_OUTPUT
+              echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Tag $TAG already exists (points at $TAG_COMMIT), skipping creation."
             echo "tag_created=false" >> $GITHUB_OUTPUT
             echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
             exit 0
           fi
           echo "Creating and pushing tag $TAG (previous: $LATEST_TAG)"
           git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
+          # push using token-authenticated URL to avoid credential issues
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY" "$TAG"
           echo "tag_created=true" >> $GITHUB_OUTPUT
           echo "tag_name=$TAG" >> $GITHUB_OUTPUT
         env:
@@ -185,94 +194,101 @@ jobs:
             rds-*.tar.gz
             rds-*.zip
 
+  # The release creation, signing and upload have been moved to a single
+  # `publish_release` job which runs once after the matrix completes. This
+  # avoids race conditions where multiple matrix runners try to create the
+  # same release.
+
+  publish_release:
+    name: Publish release and upload artifacts
+    runs-on: ubuntu-latest
+    needs: [create_tag_on_main, build]
+    if: needs.create_tag_on_main.outputs.tag_created == 'true'
+    steps:
+      - name: Checkout (shallow)
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts from matrix
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Create GitHub Release
         id: create_release
-        if: needs.create_tag_on_main.outputs.tag_created == 'true'
         uses: actions/create-release@v1
         with:
           tag_name: ${{ needs.create_tag_on_main.outputs.tag_name }}
           release_name: ${{ needs.create_tag_on_main.outputs.tag_name }}
           body: 'Automated release artifacts'
-          draft: true
+          draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Import GPG key (Linux/macOS)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os != 'Windows'
+      - name: Prepare artifacts list
         run: |
-          if [ -n "$GPG_PRIVATE_KEY" ]; then
-            echo "$GPG_PRIVATE_KEY" > ./private.gpg
-            gpg --batch --import ./private.gpg
-          else
-            echo "No GPG key provided; skipping import"
+          cd artifacts
+          ls -la
+          find . -type f -maxdepth 2 -print > ../artifact-list.txt
+
+      - name: Import GPG key (if provided)
+        id: import_gpg
+        run: |
+          if [ -z "${GPG_PRIVATE_KEY:-}" ]; then
+            echo "no_key=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
+          export GNUPGHOME=$(mktemp -d)
+          echo "$GPG_PRIVATE_KEY" > private.gpg
+          chmod 600 private.gpg
+          gpg --batch --import private.gpg
+          echo "gnupghome=$GNUPGHOME" >> $GITHUB_OUTPUT
+          echo "no_key=false" >> $GITHUB_OUTPUT
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
-      - name: Import GPG key (Windows)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os == 'Windows'
-        shell: pwsh
+      - name: Sign artifacts and checksums (if key imported)
+        if: steps.import_gpg.outputs.no_key != 'true'
         run: |
-          if ($env:GPG_PRIVATE_KEY) {
-            $env:GPG_PRIVATE_KEY | Out-File -Encoding ascii ./private.gpg
-            gpg --batch --import ./private.gpg
-          } else {
-            Write-Output 'No GPG key provided; skipping import'
-          }
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-
-      - name: Sign artifacts (Linux/macOS)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os != 'Windows'
-        run: |
-          if [ -n "$GPG_PRIVATE_KEY" ]; then
-            for f in rds-*.tar.gz rds-*.zip; do
-              if [ -f "$f" ]; then
-                gpg --batch --yes --detach-sign --armor -o "$f.asc" "$f"
+          cd artifacts
+          for f in $(cat ../artifact-list.txt); do
+            if [ -f "$f" ]; then
+              echo "Signing $f"
+              if [ -n "${GPG_PASSPHRASE:-}" ]; then
+                gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor -o "$f.asc" "$f" || exit 1
+              else
+                gpg --batch --yes --pinentry-mode loopback --detach-sign --armor -o "$f.asc" "$f" || exit 1
               fi
-            done
-            for s in rds-*.tar.gz.sha256 rds-*.zip.sha256; do
-              if [ -f "$s" ]; then
-                gpg --batch --yes --detach-sign --armor -o "$s.asc" "$s"
-              fi
-            done
-          else
-            echo "No GPG key present; skipping signing"
-          fi
+            fi
+          done
         env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Sign artifacts (Windows)
-        if: needs.create_tag_on_main.outputs.tag_created == 'true' && runner.os == 'Windows'
-        shell: pwsh
+      - name: Upload each artifact to the release
+        env:
+          UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ($env:GPG_PRIVATE_KEY) {
-            Get-ChildItem -Path . -Filter 'rds-*.tar.gz' -Name -ErrorAction SilentlyContinue | ForEach-Object {
-              $f = $_
-              if (Test-Path $f) { gpg --batch --yes --detach-sign --armor -o "$f.asc" $f }
-            }
-            Get-ChildItem -Path . -Filter 'rds-*.zip' -Name -ErrorAction SilentlyContinue | ForEach-Object {
-              $f = $_
-              if (Test-Path $f) { gpg --batch --yes --detach-sign --armor -o "$f.asc" $f }
-            }
-            Get-ChildItem -Path . -Filter 'rds-*.tar.gz.sha256' -Name -ErrorAction SilentlyContinue | ForEach-Object {
-              $s = $_
-              if (Test-Path $s) { gpg --batch --yes --detach-sign --armor -o "$s.asc" $s }
-            }
-          } else {
-            Write-Output 'No GPG key present; skipping signing'
-          }
+          cd artifacts
+          while read -r f; do
+            if [ -f "$f" ]; then
+              echo "Uploading $f"
+              curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "$UPLOAD_URL?name=$(basename "$f")"
+            fi
+          done < ../artifact-list.txt
+          # Also upload signature files if present
+          while read -r f; do
+            if [ -f "$f.asc" ]; then
+              echo "Uploading $f.asc"
+              curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f.asc" "$UPLOAD_URL?name=$(basename "$f.asc")"
+            fi
+          done < ../artifact-list.txt
 
-      - name: Upload release assets (archive + checksum)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: |
-            rds-*.tar.gz
-            rds-*.zip
-            rds-*.tar.gz.sha256
-            rds-*.zip.sha256
-          asset_name: ${{ github.run_id }}-${{ matrix.os }}-artifacts
-          asset_content_type: application/octet-stream
+      - name: Cleanup sensitive files
+        run: |
+          rm -f private.gpg || true
+          if [ -n "${GNUPGHOME:-}" ]; then rm -rf "$GNUPGHOME" || true; fi
+          rm -f artifact-list.txt || true
+        env:
+          GNUPGHOME: ${{ steps.import_gpg.outputs.gnupghome }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
