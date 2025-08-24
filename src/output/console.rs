@@ -164,41 +164,6 @@ impl ConsoleOutput {
         println!();
     }
 
-    pub fn print_warnings(&self, warnings: &[String]) {
-        println!("{}", style("• Warnings").bold().yellow());
-
-        if warnings.is_empty() {
-            println!("  No warnings");
-        } else {
-            let digits = warnings.len().to_string().len();
-            for (i, warning) in warnings.iter().enumerate() {
-                println!(
-                    "  {:0width$}) {}",
-                    i + 1,
-                    style(warning).yellow(),
-                    width = digits
-                );
-            }
-        }
-
-        println!();
-    }
-
-    pub fn print_unused_files(&self, unused: &[String]) {
-        println!("{}", style("• Unused files").bold().cyan());
-
-        if unused.is_empty() {
-            println!("  {}", style("✅ No unused files found").bold().green());
-        } else {
-            let digits = unused.len().to_string().len();
-            for (i, file) in unused.iter().enumerate() {
-                println!("  {:0width$}) {}", i + 1, file, width = digits);
-            }
-        }
-
-        println!();
-    }
-
     fn is_builtin_module(&self, module: &str) -> bool {
         matches!(
             module,

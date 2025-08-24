@@ -3,7 +3,6 @@
 use anyhow::Context;
 use notify::Event;
 use std::env;
-use std::fs as std_fs;
 use std::path::{Component, Path, PathBuf};
 use tokio::fs as tokio_fs;
 
@@ -154,24 +153,6 @@ pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
     };
 
     tokio_fs::read_to_string(&attempted).await.with_context(|| {
-        format!(
-            "Failed to read file: {} (attempted: {}) from cwd: {}",
-            path.display(),
-            attempted.display(),
-            cwd.display()
-        )
-    })
-}
-
-pub fn read_file_text_sync(path: &Path) -> anyhow::Result<String> {
-    let cwd = env::current_dir().unwrap_or_default();
-
-    let attempted = match std_fs::canonicalize(path) {
-        Ok(p) => p,
-        Err(_) => lexical_normalize_abs(path),
-    };
-
-    std_fs::read_to_string(&attempted).with_context(|| {
         format!(
             "Failed to read file: {} (attempted: {}) from cwd: {}",
             path.display(),

@@ -3,7 +3,7 @@ pub mod tree;
 pub mod unused;
 
 use crate::cache::CacheStats;
-use crate::types::{AnalysisResult, DependencyTree, ParseOptions};
+use crate::types::{AnalysisResult, ParseOptions};
 use anyhow::Result;
 use circular::CircularAnalyzer;
 use tree::TreeBuilder;
@@ -78,45 +78,5 @@ impl DependencyAnalyzer {
 
     pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
         self.tree_builder.get_incremental_cache_stats()
-    }
-
-    pub fn analyze_warnings(&self, tree: &DependencyTree) -> Vec<String> {
-        let mut warnings = Vec::new();
-
-        for (file_id, deps_opt) in tree {
-            if deps_opt.is_none() {
-                warnings.push(format!("skip {:?}, excluded or not found", file_id));
-            } else if let Some(dependencies) = deps_opt {
-                for dep in dependencies {
-                    if dep.id.is_none() {
-                        warnings.push(format!("miss {:?} in {:?}", dep.request, dep.issuer));
-                    }
-                }
-            }
-        }
-
-        warnings.sort();
-        warnings
-    }
-
-    pub async fn detect_unused_files(
-        &self,
-        pattern: &str,
-        tree: &DependencyTree,
-    ) -> Result<Vec<String>> {
-        let all_files: Vec<_> = glob::glob(pattern)?
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect();
-
-        let used_files: std::collections::HashSet<_> = tree.keys().collect();
-
-        let unused: Vec<_> = all_files
-            .into_iter()
-            .filter(|f| !used_files.contains(f))
-            .collect();
-
-        Ok(unused)
     }
 }

@@ -113,25 +113,6 @@ impl FileSystem {
     }
 }
 
-pub mod path_utils {
-    use std::path::Path;
-
-    pub fn normalize_path_string(path: &str) -> String {
-        Path::new(path).to_string_lossy().replace("\\", "/")
-    }
-
-    pub fn is_supported_file_type(path: &Path) -> bool {
-        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-            matches!(
-                extension,
-                "js" | "jsx" | "ts" | "tsx" | "mjs" | "json" | "vue"
-            )
-        } else {
-            false
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,18 +154,5 @@ mod tests {
             &PathBuf::from("test.txt"),
             &None
         ));
-    }
-
-    #[test]
-    fn test_normalize_path_string() {
-        assert_eq!(
-            path_utils::normalize_path_string("src\\main.rs"),
-            "src/main.rs"
-        );
-
-        assert_eq!(
-            path_utils::normalize_path_string("src/main.rs"),
-            "src/main.rs"
-        );
     }
 }
