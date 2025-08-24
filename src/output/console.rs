@@ -1,6 +1,7 @@
 use crate::types::DependencyTree;
 use console::style;
 use std::collections::HashMap;
+use std::io::{self, Write};
 
 pub struct ConsoleOutput;
 
@@ -10,7 +11,17 @@ impl ConsoleOutput {
     }
 
     pub fn print_tree(&self, tree: &DependencyTree, entries: &[String]) {
-        println!("{}", style("🌳 Dependencies Tree").bold().cyan());
+        let mut out = io::stdout();
+        let _ = self.print_tree_to(&mut out, tree, entries);
+    }
+
+    pub fn print_tree_to<W: Write>(
+        &self,
+        writer: &mut W,
+        tree: &DependencyTree,
+        entries: &[String],
+    ) -> io::Result<()> {
+        writeln!(writer, "{}", style("🌳 Dependencies Tree").bold().cyan())?;
 
         let mut id_map = HashMap::new();
         let mut id_counter = 0;
@@ -30,7 +41,8 @@ impl ConsoleOutput {
                 .cloned()
                 .unwrap_or_else(|| entry.clone());
 
-            self.print_node(
+            self.print_node_to(
+                writer,
                 &matching_key,
                 "  ",
                 tree,
@@ -38,10 +50,11 @@ impl ConsoleOutput {
                 &mut id_counter,
                 digits,
                 false,
-            );
+            )?;
         }
 
-        println!();
+        writeln!(writer)?;
+        Ok(())
     }
 
     fn normalize_path_for_display(&self, path: &str) -> String {
@@ -62,6 +75,29 @@ impl ConsoleOutput {
         digits: usize,
         has_more: bool,
     ) {
+        let _ = self.print_node_to(
+            &mut io::sink(),
+            node_id,
+            prefix,
+            tree,
+            id_map,
+            id_counter,
+            digits,
+            has_more,
+        );
+    }
+
+    fn print_node_to<W: Write>(
+        &self,
+        writer: &mut W,
+        node_id: &str,
+        prefix: &str,
+        tree: &DependencyTree,
+        id_map: &mut HashMap<String, usize>,
+        id_counter: &mut usize,
+        digits: usize,
+        has_more: bool,
+    ) -> io::Result<()> {
         let is_new = !id_map.contains_key(node_id);
         let id = *id_map.entry(node_id.to_string()).or_insert_with(|| {
             let current = *id_counter;
@@ -77,23 +113,24 @@ impl ConsoleOutput {
         );
 
         if self.is_builtin_module(node_id) {
-            println!("{}", style(line).blue());
-            return;
+            writeln!(writer, "{}", style(line).blue())?;
+            return Ok(());
         }
 
         if !is_new {
-            println!("{}", style(line).dim());
-            return;
+            writeln!(writer, "{}", style(line).dim())?;
+            return Ok(());
         }
 
         if let Some(Some(deps)) = tree.get(node_id) {
-            println!("{}", line);
+            writeln!(writer, "{}", line)?;
             let new_prefix = format!("{}{}   ", prefix, if has_more { "·" } else { " " });
 
             for (i, dep) in deps.iter().enumerate() {
                 let dep_id = dep.id.as_ref().unwrap_or(&dep.request);
                 let is_last = i == deps.len() - 1;
-                self.print_node(
+                self.print_node_to(
+                    writer,
                     dep_id,
                     &new_prefix,
                     tree,
@@ -101,11 +138,13 @@ impl ConsoleOutput {
                     id_counter,
                     digits,
                     !is_last,
-                );
+                )?;
             }
         } else {
-            println!("{}", style(line).yellow());
+            writeln!(writer, "{}", style(line).yellow())?;
         }
+
+        Ok(())
     }
 
     ///
@@ -158,41 +197,6 @@ impl ConsoleOutput {
                         style(format!("{} circular dependencies found", limit)).bold()
                     );
                 }
-            }
-        }
-
-        println!();
-    }
-
-    pub fn print_warnings(&self, warnings: &[String]) {
-        println!("{}", style("• Warnings").bold().yellow());
-
-        if warnings.is_empty() {
-            println!("  No warnings");
-        } else {
-            let digits = warnings.len().to_string().len();
-            for (i, warning) in warnings.iter().enumerate() {
-                println!(
-                    "  {:0width$}) {}",
-                    i + 1,
-                    style(warning).yellow(),
-                    width = digits
-                );
-            }
-        }
-
-        println!();
-    }
-
-    pub fn print_unused_files(&self, unused: &[String]) {
-        println!("{}", style("• Unused files").bold().cyan());
-
-        if unused.is_empty() {
-            println!("  {}", style("✅ No unused files found").bold().green());
-        } else {
-            let digits = unused.len().to_string().len();
-            for (i, file) in unused.iter().enumerate() {
-                println!("  {:0width$}) {}", i + 1, file, width = digits);
             }
         }
 

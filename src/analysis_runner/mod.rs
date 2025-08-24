@@ -160,22 +160,4 @@ impl AnalysisRunner {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::DependencyTree;
-
-    #[test]
-    fn test_count_total_dependencies() {
-        let mut tree = DependencyTree::new();
-        tree.insert("file1.js".to_string(), Some(vec![]));
-        tree.insert("file2.js".to_string(), None);
-
-        assert_eq!(AnalysisRunner::count_total_dependencies(&tree), 0);
-    }
-
-    #[test]
-    fn test_print_circular_dependencies_empty() {
-        let out = ConsoleOutput::new();
-        out.print_circular(&[], None, None);
-    }
-}
+mod tests;

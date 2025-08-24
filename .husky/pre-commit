@@ -1,6 +1,16 @@
 #!/usr/bin/env sh
-# Husky pre-commit hook: run lint-staged (which runs formatters on staged files)
+# Husky pre-commit hook: run lint-staged (formatters) and abort on failure
 echo "🔧 Running lint-staged..."
+
+# If cargo is available, run rustfmt to auto-format Rust files and restage changes
+if command -v cargo >/dev/null 2>&1; then
+  echo "⚙️  Running cargo fmt --all to format Rust files..."
+  cargo fmt --all
+  # restage any formatting changes so the commit includes them
+  git add -u
+else
+  echo "⚠️  cargo not found in PATH; skipping Rust formatting." >&2
+fi
 
 if command -v npx >/dev/null 2>&1; then
   npx lint-staged
@@ -13,4 +23,11 @@ else
   exit 1
 fi
 
+status=$?
+if [ $status -ne 0 ]; then
+  echo "❌ lint-staged failed (status $status). Aborting commit." >&2
+  exit $status
+fi
+
+# success — allow commit to proceed (tests are run on pre-push)
 exit 0

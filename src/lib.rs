@@ -7,7 +7,6 @@ pub mod analysis_runner;
 pub mod analyzer;
 pub mod cache;
 pub mod cli;
-pub mod config;
 pub mod filesystem;
 pub mod output;
 pub mod parser;

@@ -20,7 +20,7 @@ pub struct WatchRunner;
 impl WatchRunner {
     pub async fn run_watch_mode(cli: &Cli) -> Result<()> {
         println!(
-            "{} {} ({})",
+            "{} {} ({} )",
             style("👁️").blue(),
             style("Starting watch mode...").bold().blue(),
             style("Press Ctrl+C to exit").dim()
@@ -202,22 +202,4 @@ impl WatchRunner {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::DependencyTree;
-
-    #[test]
-    fn test_count_total_dependencies() {
-        let mut tree = DependencyTree::new();
-        tree.insert("file1.js".to_string(), Some(vec![]));
-        tree.insert("file2.js".to_string(), None);
-
-        assert_eq!(WatchRunner::count_total_dependencies(&tree), 0);
-    }
-
-    #[test]
-    fn test_print_circular_dependencies_compact() {
-        let out = ConsoleOutput::new();
-        out.print_circular(&[], None, Some(3));
-    }
-}
+mod tests;

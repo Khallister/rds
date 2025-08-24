@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# Husky pre-push hook: run cargo tests to block pushing commits that break tests
+
+echo "🔬 Running cargo test --lib before push..."
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "⚠️ cargo not found in PATH. Aborting push." >&2
+  exit 1
+fi
+
+cargo test --lib
+status=$?
+if [ $status -ne 0 ]; then
+  echo "❌ cargo test failed (status $status). Aborting push." >&2
+  exit $status
+fi
+
+# success — allow push to proceed
+exit 0

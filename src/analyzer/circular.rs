@@ -59,7 +59,7 @@ impl CircularAnalyzer {
         }
 
         if let Some(index) = path.iter().position(|x| x == &id) {
-            let mut circular = path[index..].to_vec();
+            let circular = path[index..].to_vec();
 
             fn canonicalize(mut cyc: Vec<String>) -> Vec<String> {
                 if cyc.is_empty() {

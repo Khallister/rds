@@ -7,6 +7,9 @@ pub struct ModuleResolver {
     builtin_modules: std::collections::HashSet<String>,
 }
 
+#[cfg(test)]
+mod tests;
+
 impl ModuleResolver {
     pub fn new() -> Self {
         let mut builtin_modules = std::collections::HashSet::new();

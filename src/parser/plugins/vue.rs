@@ -27,6 +27,10 @@ impl VueParser {
         })
     }
 
+    pub fn handled_extensions(&self) -> Vec<String> {
+        vec!["vue".to_string()]
+    }
+
     pub fn parse_file<P: AsRef<Path>>(
         &self,
         file_path: P,
