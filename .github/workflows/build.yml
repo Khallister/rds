@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v*', 'release-*' ]
+  pull_request:
+    types: [closed]
+    branches: [ main ]
   workflow_dispatch: {}
 
 permissions:
@@ -13,7 +16,13 @@ jobs:
   create_tag_on_main:
     name: Create tag from package version (main)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
+    outputs:
+      tag_created: ${{ steps.create_tag.outputs.tag_created }}
+      tag_name: ${{ steps.create_tag.outputs.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,21 +31,37 @@ jobs:
 
       - name: Read package.json version
         id: version
-        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
-
-      - name: Create and push tag
         run: |
+          echo "version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag (only if version changed)
+        id: create_tag
+        run: |
+          set -e
           TAG="v${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
+          if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" = "$TAG" ]; then
+            echo "No version change detected (latest tag: $LATEST_TAG). Skipping tag creation."
+            echo "tag_created=false" >> $GITHUB_OUTPUT
+            echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "Creating and pushing tag $TAG (previous: $LATEST_TAG)"
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
+          echo "tag_created=true" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    needs: [create_tag_on_main]
+    if: needs.create_tag_on_main.outputs.tag_created == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -44,6 +69,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_tag_on_main.outputs.tag_name }}
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
