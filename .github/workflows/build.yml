@@ -211,6 +211,11 @@ jobs:
           cd artifacts
           ls -la
           find . -type f -maxdepth 2 -print > ../artifact-list.txt
+          echo "Artifacts found:" && wc -l ../artifact-list.txt && cat ../artifact-list.txt
+          if [ ! -s ../artifact-list.txt ]; then
+            echo "No artifacts were downloaded from the build matrix; aborting release publish." >&2
+            exit 1
+          fi
 
       - name: Import GPG key (if provided)
         id: import_gpg
@@ -246,23 +251,37 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GNUPGHOME: ${{ steps.import_gpg.outputs.gnupghome }}
 
-      - name: Upload each artifact to the release
+      - name: Upload each artifact to the release (with checks)
         env:
           UPLOAD_URL: ${{ steps.create_release.outputs.upload_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           cd artifacts
+          # clean upload URL (remove template like {?name,label})
+          UPLOAD_BASE=${UPLOAD_URL%%\{*}
+          echo "Using upload base: $UPLOAD_BASE"
           while read -r f; do
             if [ -f "$f" ]; then
               echo "Uploading $f"
-              curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "$UPLOAD_URL?name=$(basename "$f")"
+              http_code=$(curl -sS -o /tmp/upload_resp -w "%{http_code}" -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "$UPLOAD_BASE?name=$(basename "$f")") || true
+              if [ "$http_code" != "201" ]; then
+                echo "Upload failed for $f, HTTP $http_code" >&2
+                cat /tmp/upload_resp || true
+                exit 1
+              fi
             fi
           done < ../artifact-list.txt
           # Also upload signature files if present
           while read -r f; do
             if [ -f "$f.asc" ]; then
               echo "Uploading $f.asc"
-              curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f.asc" "$UPLOAD_URL?name=$(basename "$f.asc")"
+              http_code=$(curl -sS -o /tmp/upload_resp -w "%{http_code}" -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f.asc" "$UPLOAD_BASE?name=$(basename "$f.asc")") || true
+              if [ "$http_code" != "201" ]; then
+                echo "Upload failed for $f.asc, HTTP $http_code" >&2
+                cat /tmp/upload_resp || true
+                exit 1
+              fi
             fi
           done < ../artifact-list.txt
 
