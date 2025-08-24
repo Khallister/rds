@@ -110,24 +110,41 @@ function findAssetForRelease(release, candidates) {
 
 function downloadToFile(url, dest, headers = {}) {
   return new Promise((resolve, reject) => {
-    const out = fs.createWriteStream(dest);
-    const opts = new URL(url);
-    opts.headers = { "user-agent": "rds-installer", ...headers };
-    https
-      .get(opts, (res) => {
-        if (res.statusCode && res.statusCode >= 400)
-          return reject(new Error(`HTTP ${res.statusCode}`));
-        res.pipe(out);
-        out.on("finish", () => out.close(resolve));
-      })
-      .on("error", (err) => {
-        try {
-          fs.unlinkSync(dest);
-        } catch (e) {
-            if (DEBUG) console.error(e);
+    const maxRedirects = 5;
+    const doGet = function doGet(urlToGet, hdrs, redirectsLeft) {
+      if (DEBUG) console.log(`[rds-installer] downloadToFile: requesting ${urlToGet} (redirectsLeft=${redirectsLeft})`);
+      if (redirectsLeft < 0) return reject(new Error('Too many redirects'));
+      const out = fs.createWriteStream(dest);
+      const opts = new URL(urlToGet);
+      opts.headers = { "user-agent": "rds-installer", ...hdrs };
+      const req = https.get(opts, (res) => {
+        if (DEBUG) console.log(`[rds-installer] downloadToFile: got HTTP ${res.statusCode} for ${urlToGet}`);
+        // follow redirects
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers && res.headers.location) {
+          try { out.close(); fs.unlinkSync(dest); } catch (err) { if (DEBUG) console.error('cleanup failed', err); }
+          const loc = res.headers.location;
+          // if redirecting off GitHub, drop authorization header
+          let nextHeaders = { ...hdrs };
+          try {
+            const locUrl = new URL(loc);
+            if (locUrl.hostname !== opts.hostname) delete nextHeaders.authorization;
+          } catch (err) { if (DEBUG) console.error('bad redirect URL', err); }
+          res.resume();
+          return doGet(loc, nextHeaders, redirectsLeft - 1);
         }
+          if (res.statusCode && res.statusCode >= 400) {
+          try { out.close(); fs.unlinkSync(dest); } catch (err) { if (DEBUG) console.error('cleanup failed', err); }
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+        res.pipe(out);
+  out.on("finish", () => out.close(resolve));
+      });
+      req.on("error", (err) => {
+        try { fs.unlinkSync(dest); } catch (err2) { if (DEBUG) console.error('cleanup failed', err2); }
         reject(err);
       });
+    };
+    doGet(url, headers, maxRedirects);
   });
 }
 
@@ -143,17 +160,27 @@ function programExists(cmd) {
 }
 
 function extractArchive(archivePath, destDir) {
-  if (programExists("unzip")) {
-    const r = spawnSync("unzip", ["-o", archivePath, "-d", destDir], {
-      stdio: "inherit",
-    });
-    return r.status === 0;
+  // prefer zip handling on Windows via PowerShell
+  if (archivePath.endsWith('.zip')) {
+    if (process.platform === 'win32') {
+      const r = spawnSync('powershell', ['-Command', `Expand-Archive -Force -Path '${archivePath}' -DestinationPath '${destDir}'`], { stdio: 'inherit' });
+      return r.status === 0;
+    }
+    if (programExists("unzip")) {
+      const r = spawnSync("unzip", ["-o", archivePath, "-d", destDir], {
+        stdio: "inherit",
+      });
+      return r.status === 0;
+    }
   }
-  if (programExists("tar")) {
-    const r = spawnSync("tar", ["-xzf", archivePath, "-C", destDir], {
-      stdio: "inherit",
-    });
-    return r.status === 0;
+  // handle tar.gz
+  if (archivePath.endsWith('.tar.gz')) {
+    if (programExists("tar")) {
+      const r = spawnSync("tar", ["-xzf", archivePath, "-C", destDir], {
+        stdio: "inherit",
+      });
+      return r.status === 0;
+    }
   }
   return false;
 }
@@ -166,13 +193,16 @@ function _authHeaders() {
 }
 
 async function downloadAndPlaceFile(url, dest) {
-  await downloadToFile(url, dest, _authHeaders());
+  // Use the API asset URL with an explicit Accept header to get the raw binary
+  await downloadToFile(url, dest, { ..._authHeaders(), Accept: 'application/octet-stream' });
   if (process.platform !== "win32") fs.chmodSync(dest, 0o755);
 }
 
 async function downloadAndExtractArchive(asset, binDir, ext) {
   const tmpName = path.join(binDir, asset.name);
-  await downloadToFile(asset.browser_download_url, tmpName, _authHeaders());
+  // Prefer the API asset URL and request the raw binary
+  const assetUrl = asset.url || asset.browser_download_url;
+  await downloadToFile(assetUrl, tmpName, { ..._authHeaders(), Accept: 'application/octet-stream' });
   const ok = extractArchive(tmpName, binDir);
   if (!ok) return false;
   const extractedPath = path.join(binDir, `rds${ext}`);
@@ -223,20 +253,43 @@ function tryLocalBuild(finalBinaryPath, ext) {
 }
 
 async function tryInstallFromRelease(release, platform, arch, ext, binDir, finalBinaryPath) {
-  const candidates = [
+  // Support alternate arch naming used by CI artifacts (e.g. x64 -> x86_64)
+  const altArchMap = { x64: "x86_64", arm64: "arm64" };
+  const altArch = altArchMap[arch] || arch;
+
+  const fileCandidates = [
     `rds-${platform}-${arch}${ext}`,
+    `rds-${platform}-${altArch}${ext}`,
     `rds-${platform}${ext}`,
     `rds${ext}`,
   ];
+
   const archiveCandidates = [
     `rds-${platform}-${arch}.zip`,
+    `rds-${platform}-${altArch}.zip`,
     `rds-${platform}-${arch}.tar.gz`,
+    `rds-${platform}-${altArch}.tar.gz`,
     `rds-${platform}.zip`,
     `rds-${platform}.tar.gz`,
   ];
-  const foundAsset = findAssetForRelease(release, candidates) || findAssetForRelease(release, archiveCandidates);
-  const assetIsArchive = !!findAssetForRelease(release, archiveCandidates);
-  if (!foundAsset) return false;
+
+  if (DEBUG) console.log('[rds-installer] candidate file names:', fileCandidates, archiveCandidates);
+
+  const fileAsset = findAssetForRelease(release, fileCandidates);
+  const archiveAsset = findAssetForRelease(release, archiveCandidates);
+
+  let foundAsset = null;
+  let assetIsArchive;
+  if (fileAsset) {
+    foundAsset = fileAsset;
+    assetIsArchive = false;
+  } else if (archiveAsset) {
+    foundAsset = archiveAsset;
+    assetIsArchive = true;
+  } else {
+    return false;
+  }
+
   return await installAssetFromRelease(foundAsset, assetIsArchive, binDir, finalBinaryPath, ext);
 }
 
