@@ -20,6 +20,7 @@ jobs:
     outputs:
       tag_created: ${{ steps.create_tag.outputs.tag_created }}
       tag_name: ${{ steps.create_tag.outputs.tag_name }}
+      commit_sha: ${{ steps.create_tag.outputs.commit_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,7 +105,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.create_tag_on_main.outputs.tag_name }}
+          ref: ${{ needs.create_tag_on_main.outputs.commit_sha }}
           fetch-depth: 0
 
       - name: Install Rust toolchain
