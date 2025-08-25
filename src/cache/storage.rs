@@ -34,7 +34,6 @@ impl FileCache {
 
         let path = Path::new(fs_path);
         if !path.exists() {
-            eprintln!("[cache] is_cached: fs_path does not exist: '{}'", fs_path);
             return Ok(false);
         }
 

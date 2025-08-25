@@ -51,7 +51,6 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
         files: vec![],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -62,7 +61,7 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: Some(false),
         detect_unused_files_from: None,
@@ -92,7 +91,7 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
         files: vec![],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -103,7 +102,7 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: Some(false),
         detect_unused_files_from: None,
@@ -132,7 +131,7 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
         files: vec![file_path_s.clone()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -143,7 +142,7 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: Some("circular:1".to_string()),
         progress: Some(false),
         detect_unused_files_from: None,
@@ -175,7 +174,7 @@ async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Resul
         files: vec![file_path_s.clone()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -186,7 +185,7 @@ async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Resul
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: None,
         detect_unused_files_from: None,
@@ -221,7 +220,7 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         files: vec![],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -232,7 +231,7 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: Some(false),
         detect_unused_files_from: None,
@@ -269,7 +268,7 @@ async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<
         files: vec![file_path_s.clone()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -280,7 +279,7 @@ async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: Some(true),
         detect_unused_files_from: None,

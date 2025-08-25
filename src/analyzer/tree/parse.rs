@@ -88,21 +88,44 @@ pub async fn process_parsed_results(
     for result in parsed_results {
         match result {
             Ok((file_path, dependencies_opt)) => {
-                if let Some(ref deps) = dependencies_opt {
+                if let Some(mut deps) = dependencies_opt {
                     let cache_key = crate::utils::path::normalize_path_for_storage(&file_path)?;
+
+                    // Resolve dependency requests to absolute/normalized ids when possible
+                    let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
+                    for dep in deps.iter_mut() {
+                        if dep.id.is_none() {
+                            if let Ok(Some(resolved_path)) = resolver
+                                .resolve_module(context, &dep.request, &options.extensions)
+                                .await
+                            {
+                                if let Ok(norm) =
+                                    crate::utils::path::normalize_path_for_storage(&resolved_path)
+                                {
+                                    dep.id = Some(norm);
+                                }
+                            }
+                        }
+                    }
+
+                    // Cache enriched dependencies (with ids when resolved)
                     cache
                         .cache_dependencies(&file_path, &cache_key, deps.clone())
                         .await?;
-                }
 
-                let normalized_path = crate::utils::path::normalize_path_for_storage(&file_path)?;
-                tree.insert(normalized_path, dependencies_opt.clone());
+                    let normalized_path =
+                        crate::utils::path::normalize_path_for_storage(&file_path)?;
+                    tree.insert(normalized_path.clone(), Some(deps.clone()));
 
-                if let Some(dependencies) = dependencies_opt {
-                    let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
-
-                    for dep in dependencies {
-                        if let Ok(Some(resolved_path)) = resolver
+                    // Use resolved ids from deps when available to avoid re-resolving
+                    for dep in deps {
+                        if let Some(resolved_id) = dep.id {
+                            if !processed_files.contains(&resolved_id)
+                                && !new_dependencies.contains(&resolved_id)
+                            {
+                                new_dependencies.push(resolved_id);
+                            }
+                        } else if let Ok(Some(resolved_path)) = resolver
                             .resolve_module(context, &dep.request, &options.extensions)
                             .await
                         {
@@ -115,6 +138,10 @@ pub async fn process_parsed_results(
                             }
                         }
                     }
+                } else {
+                    let normalized_path =
+                        crate::utils::path::normalize_path_for_storage(&file_path)?;
+                    tree.insert(normalized_path, None);
                 }
             }
             Err((file_path, error)) => {

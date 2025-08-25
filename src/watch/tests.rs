@@ -13,7 +13,7 @@ async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<(
         files: vec![".".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -24,7 +24,7 @@ async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<(
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: None,
         detect_unused_files_from: None,
@@ -50,7 +50,7 @@ async fn test_run_incremental_analysis_print_tree_only() -> anyhow::Result<()> {
         files: vec![".".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules|\\.git".to_string(),
@@ -61,7 +61,7 @@ async fn test_run_incremental_analysis_print_tree_only() -> anyhow::Result<()> {
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: None,
         detect_unused_files_from: None,

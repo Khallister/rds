@@ -48,7 +48,7 @@ fn dependency_tree_insert_and_get() {
 fn parse_options_defaults() {
     let opts = ParseOptions::default();
     assert!(opts.extensions.contains(&".js".to_string()));
-    assert!(opts.js_extensions.contains(&".js".to_string()));
+    assert!(opts.extensions.contains(&".js".to_string()));
     assert!(opts.cache_enabled);
 }
 

@@ -100,7 +100,7 @@ async fn test_runtime_parser_used_by_tree_builder() -> anyhow::Result<()> {
     let mut opts = crate::types::config::ParseOptions::default();
     opts.context = td.path().to_path_buf();
     opts.extensions.push(".foo".to_string());
-    opts.js_extensions.push(".foo".to_string());
+    opts.extensions.push(".foo".to_string());
 
     let mut tb = crate::analyzer::tree::builder::TreeBuilder::new()?;
 

@@ -1,0 +1,28 @@
+# rds.config.toml — optional project-level defaults for rds
+# This file is loaded by RDS (if present) and provides defaults which the CLI
+# flags override. Keep this file next to your project root to share settings with
+# other developers. Comments and example values follow.
+
+# File extensions to consider when scanning. Include leading dots.
+extensions = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".json", ".vue"]
+
+# Regex for files to include (applied against file paths). Default: ".*"
+include = ".*"
+
+# Regex for files/paths to exclude. Matches are skipped. Default excludes VCS and common build dirs.
+exclude = "node_modules|\\.git|\\.svn|\\.hg|\\.vite|coverage|dist|build|out|\\.next|\\.nuxt"
+
+# Regex to exclude from dependency resolution/expansion (e.g. node_modules)
+dependency_exclude = "node_modules|\\.git|\\.svn|\\.hg"
+
+# Enable or disable the in-memory cache (default true). Note: currently in-memory only.
+cache_enabled = true
+
+# Optional: limit total dependencies to collect (0 or omitted means no limit)
+#take = 0
+
+# Optional path to a tsconfig.json to enable TypeScript path alias resolution.
+#tsconfig = "./tsconfig.json"
+
+# Skip dynamic imports behavior: one of "Never", "Tree", or "Circular"
+#skip_dynamic_imports = "Never"

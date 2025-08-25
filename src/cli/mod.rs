@@ -29,13 +29,6 @@ pub struct Cli {
 
     #[arg(
         long,
-        default_value = ".ts,.tsx,.mjs,.js,.jsx",
-        help = "JavaScript file extensions (comma-separated)"
-    )]
-    pub js: String,
-
-    #[arg(
-        long,
         help = "Filter files by extension when scanning directories (e.g., 'js,ts,vue')"
     )]
     pub filter: Option<String>,
@@ -77,9 +70,6 @@ pub struct Cli {
     #[arg(long, help = "Path to tsconfig.json for TypeScript path resolution")]
     pub tsconfig: Option<PathBuf>,
 
-    #[arg(short = 'T', long, help = "Enable code transformations during parsing")]
-    pub transform: bool,
-
     #[arg(long, help = "Custom exit codes (format: 'case:code,case:code')")]
     pub exit_code: Option<String>,
 
@@ -105,7 +95,7 @@ pub struct Cli {
     #[arg(short = 'W', long, action = clap::ArgAction::SetTrue, help = "Watch mode: monitor files for changes and re-run analysis")]
     pub watch: bool,
 
-    #[arg(long, action = clap::ArgAction::SetTrue, help = "Enable file caching to speed up repeated analysis")]
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Enable file caching to speed up repeated analysis (enabled by default when --watch unless --no-cache)")]
     pub cache: bool,
 
     /// Disable file caching (override default)

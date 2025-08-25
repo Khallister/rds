@@ -28,6 +28,7 @@ pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
     base
 }
 
+pub mod file_config;
 pub mod path;
 
 pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
@@ -65,22 +66,47 @@ fn is_relevant_file_change(path: &Path) -> bool {
 pub mod config {
     use crate::cli::{Cli, SkipDynamicImportsArg};
     use crate::types::{ParseOptions, SkipDynamicImports};
+    use crate::utils::file_config;
     use anyhow::Result;
 
     pub fn create_parse_options_from_cli(cli: &Cli) -> Result<ParseOptions> {
         let mut options = ParseOptions::default();
+        // Load optional rds.config.toml as a source of defaults. CLI flags override file values.
+        if let Some(file_cfg) = file_config::load_rds_config() {
+            if let Some(exts) = file_cfg.extensions {
+                options.extensions = exts;
+            }
+            if let Some(inc) = file_cfg.include {
+                options.include = regex::Regex::new(&inc)?;
+            }
+            if let Some(exc) = file_cfg.exclude {
+                options.exclude = regex::Regex::new(&exc)?;
+            }
+            if let Some(dep_exc) = file_cfg.dependency_exclude {
+                options.dependency_exclude = regex::Regex::new(&dep_exc)?;
+            }
+            if let Some(ts) = file_cfg.tsconfig {
+                options.tsconfig = Some(std::path::PathBuf::from(ts));
+            }
+            if let Some(t) = file_cfg.take {
+                options.take = Some(t);
+            }
+            if let Some(cache) = file_cfg.cache_enabled {
+                options.cache_enabled = cache;
+            }
+        }
 
         if let Some(context) = &cli.context {
             options.context = context.clone();
         }
 
-        options.extensions = cli.extensions.split(',').map(|s| s.to_string()).collect();
-        options.js_extensions = cli.js.split(',').map(|s| s.to_string()).collect();
+        if !cli.extensions.trim().is_empty() {
+            options.extensions = cli.extensions.split(',').map(|s| s.to_string()).collect();
+        }
         options.include = regex::Regex::new(&cli.include)?;
         options.exclude = regex::Regex::new(&cli.exclude)?;
         options.dependency_exclude = regex::Regex::new(r"node_modules|\\.git|\\.svn|\\.hg")?;
         options.tsconfig = cli.tsconfig.clone();
-        options.transform = cli.transform;
         options.take = cli.take;
         options.skip_dynamic_imports = match cli.skip_dynamic_imports {
             Some(SkipDynamicImportsArg::Tree) => SkipDynamicImports::Tree,

@@ -105,6 +105,8 @@ rds src/ --cache
 # Watch mode: monitor files and re-analyze on changes
 rds src/ --watch
 
+Note: `--cache` is enabled by default when running with `--watch`. Specify `--no-cache` to force cache-off behavior.
+
 # Watch mode with caching (recommended for development)
 rds src/ --watch --cache --circular
 
@@ -165,7 +167,7 @@ rds --help
 | Flag | Description | Default Value |
 |------|-------------|---------------|
 | `--extensions <LIST>` | File extensions to analyze | `.ts,.tsx,.mjs,.js,.jsx,.json,.vue` |
-| `--js <LIST>` | JavaScript-like extensions | `.ts,.tsx,.mjs,.js,.jsx` |
+| (removed) `--js <LIST>` | (deprecated) JavaScript-like extensions — use `--extensions` instead | `.ts,.tsx,.mjs,.js,.jsx` |
 | `--filter <LIST>` | Filter by extension when scanning dirs | None |
 | `--include <PATTERN>` | Include files matching pattern | `.*` |
 | `--exclude <PATTERN>` | Exclude files matching pattern | `node_modules\|\.git\|...` |
@@ -175,7 +177,7 @@ rds --help
 | Flag | Description | Example |
 |------|-------------|---------|
 | `--tsconfig <FILE>` | Use specific TypeScript config | `--tsconfig ./tsconfig.json` |
-| `--transform` | Enable TypeScript transformations | `rds src/ --transform` |
+| (removed) `--transform` | (deprecated) Enable TypeScript transformations — currently not implemented; use transforms in your build pipeline | `rds src/ --transform` |
 
 ### Performance Options
 

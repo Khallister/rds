@@ -31,7 +31,7 @@ fn test_create_parse_options_from_cli_basic() {
         files: vec!["x".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules".to_string(),
@@ -42,7 +42,7 @@ fn test_create_parse_options_from_cli_basic() {
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: None,
         detect_unused_files_from: None,
@@ -121,7 +121,6 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
         files: vec!["x".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules".to_string(),
@@ -132,7 +131,7 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
         progress: None,
         detect_unused_files_from: None,
@@ -168,4 +167,72 @@ fn test_configure_thread_pool_none() {
     // calling with None should be a no-op and return Ok
     let res = threading::configure_thread_pool(None);
     assert!(res.is_ok());
+}
+
+#[test]
+fn test_rds_config_toml_precedence() {
+    use crate::cli::Cli;
+    use std::fs;
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let cfg_dir = dir.path().join("rds");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    let cfg_path = cfg_dir.join("rds.config.toml");
+
+    let cfg = r#"
+extensions = [".abc", ".def"]
+include = ".*abc"
+cache_enabled = false
+"#;
+
+    fs::write(&cfg_path, cfg).unwrap();
+
+    // set XDG_CONFIG_HOME to our temp dir so loader picks up the file without changing cwd
+    let prev_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let dir_str = dir.path().to_str().expect("temp dir path must be unicode");
+    std::env::set_var("XDG_CONFIG_HOME", dir_str);
+
+    let cli = Cli {
+        files: vec!["x".to_string()],
+        context: None,
+        extensions: "".to_string(), // CLI not setting extensions
+        filter: None,
+        include: ".*".to_string(),
+        exclude: "node_modules".to_string(),
+        output: None,
+        tree: false,
+        circular: false,
+        warning: false,
+        log: false,
+        throw: false,
+        tsconfig: None,
+        exit_code: None,
+        progress: None,
+        detect_unused_files_from: None,
+        skip_dynamic_imports: None,
+        take: None,
+        watch: false,
+        cache: false,
+        no_cache: false,
+        threads: None,
+    };
+
+    let opts = config::create_parse_options_from_cli(&cli).unwrap();
+    // from file
+    assert!(opts.extensions.contains(&".abc".to_string()));
+    assert_eq!(opts.cache_enabled, false);
+
+    // CLI should override cache_enabled via effective_cache_setting -> simulate CLI enabling cache
+    let mut cli2 = cli.clone();
+    cli2.cache = true;
+    let opts2 = config::create_parse_options_from_cli(&cli2).unwrap();
+    assert_eq!(opts2.cache_enabled, true);
+
+    // restore XDG_CONFIG_HOME
+    if let Some(v) = prev_xdg {
+        std::env::set_var("XDG_CONFIG_HOME", v);
+    } else {
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
 }
