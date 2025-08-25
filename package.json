@@ -4,7 +4,7 @@
   "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
   "main": "index.js",
   "bin": {
-    "rds": "./bin/rds.exe"
+    "rds": "./bin/run-rds.js"
   },
   "scripts": {
     "postinstall": "node install.js",
@@ -49,6 +49,7 @@
   ],
   "files": [
     "bin/",
+    "bin/run-rds.js",
     "install.js",
     "index.js",
     "README.md",
