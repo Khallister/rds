@@ -66,7 +66,12 @@ impl TreeBuilder {
                 if let Some(dependencies) = deps_opt {
                     let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
                     for dep in dependencies {
-                        if let Ok(Some(resolved_path)) = self
+                        if let Some(id) = dep.id {
+                            // id is already a normalized storage path (set when cached)
+                            if !processed_files.contains(&id) && !new_dependencies.contains(&id) {
+                                new_dependencies.push(id);
+                            }
+                        } else if let Ok(Some(resolved_path)) = self
                             .resolver
                             .resolve_module(context, &dep.request, &options.extensions)
                             .await
@@ -123,6 +128,7 @@ impl TreeBuilder {
         self.cache.get_incremental_stats()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn cache_mut(&mut self) -> &mut FileCache {
         &mut self.cache
     }

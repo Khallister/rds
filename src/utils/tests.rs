@@ -31,22 +31,20 @@ fn test_create_parse_options_from_cli_basic() {
         files: vec!["x".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
+
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules".to_string(),
         output: None,
         tree: false,
         circular: false,
-        warning: false,
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
-        progress: None,
-        detect_unused_files_from: None,
-        skip_dynamic_imports: None,
+        progress: false,
+        skip_dynamic_imports: false,
         take: None,
         watch: false,
         cache: false,
@@ -61,13 +59,14 @@ fn test_create_parse_options_from_cli_basic() {
 #[test]
 fn test_extract_relevant_file_changes_event() {
     use std::path::PathBuf;
+
     let ev = notify::Event {
         kind: EventKind::Modify(notify::event::ModifyKind::Any),
         paths: vec![PathBuf::from("a.js")],
         attrs: Default::default(),
     };
 
-    let changes = extract_relevant_file_changes(&ev, &[]);
+    let changes = extract_relevant_file_changes(&ev, &[], &regex::Regex::new(r"$^").unwrap());
     assert_eq!(changes, vec!["a.js".to_string()]);
 }
 
@@ -101,7 +100,7 @@ fn test_extract_relevant_file_changes_other_kind() {
         paths: vec![PathBuf::from("a.js")],
         attrs: Default::default(),
     };
-    let changes = extract_relevant_file_changes(&ev, &[]);
+    let changes = extract_relevant_file_changes(&ev, &[], &regex::Regex::new(r"$^").unwrap());
     // should be empty because Other is not Create/Modify/Remove
     assert!(changes.is_empty());
 }
@@ -114,29 +113,25 @@ fn test_is_relevant_file_change_no_extension() {
 
 #[test]
 fn test_create_parse_options_from_cli_skip_dynamic_variants() {
-    use crate::cli::SkipDynamicImportsArg;
     use crate::types::SkipDynamicImports;
 
     let mut cli = Cli {
         files: vec!["x".to_string()],
         context: None,
         extensions: ".js".to_string(),
-        js: ".js".to_string(),
         filter: None,
         include: ".*".to_string(),
         exclude: "node_modules".to_string(),
         output: None,
         tree: false,
         circular: false,
-        warning: false,
         log: false,
         throw: false,
         tsconfig: None,
-        transform: false,
+
         exit_code: None,
-        progress: None,
-        detect_unused_files_from: None,
-        skip_dynamic_imports: Some(SkipDynamicImportsArg::Tree),
+        progress: false,
+        skip_dynamic_imports: false,
         take: None,
         watch: false,
         cache: false,
@@ -145,9 +140,10 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
-    assert_eq!(opts.skip_dynamic_imports, SkipDynamicImports::Tree);
+    assert_eq!(opts.skip_dynamic_imports, SkipDynamicImports::Never);
 
-    cli.skip_dynamic_imports = Some(SkipDynamicImportsArg::Circular);
+    // set true -> Circular
+    cli.skip_dynamic_imports = true;
     let opts2 = config::create_parse_options_from_cli(&cli).unwrap();
     assert_eq!(opts2.skip_dynamic_imports, SkipDynamicImports::Circular);
 }
@@ -168,4 +164,71 @@ fn test_configure_thread_pool_none() {
     // calling with None should be a no-op and return Ok
     let res = threading::configure_thread_pool(None);
     assert!(res.is_ok());
+}
+
+#[test]
+fn test_rds_config_toml_precedence() {
+    use crate::cli::Cli;
+    use std::fs;
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let cfg_dir = dir.path().join("rds");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    let cfg_path = cfg_dir.join("rds.config.toml");
+
+    let cfg = r#"
+extensions = [".abc", ".def"]
+include = ".*abc"
+cache_enabled = false
+"#;
+
+    fs::write(&cfg_path, cfg).unwrap();
+
+    // set XDG_CONFIG_HOME to our temp dir so loader picks up the file without changing cwd
+    let prev_xdg = std::env::var("XDG_CONFIG_HOME").ok();
+    let dir_str = dir.path().to_str().expect("temp dir path must be unicode");
+    std::env::set_var("XDG_CONFIG_HOME", dir_str);
+
+    let cli = Cli {
+        files: vec!["x".to_string()],
+        context: None,
+        extensions: "".to_string(), // CLI not setting extensions
+        filter: None,
+        include: ".*".to_string(),
+        exclude: "node_modules".to_string(),
+        output: None,
+        tree: false,
+        circular: false,
+
+        log: false,
+        throw: false,
+        tsconfig: None,
+        exit_code: None,
+        progress: false,
+        skip_dynamic_imports: false,
+        take: None,
+        watch: false,
+        cache: false,
+        no_cache: false,
+        threads: None,
+    };
+
+    let opts = config::create_parse_options_from_cli(&cli).unwrap();
+    // from file
+    assert!(opts.extensions.contains(&".abc".to_string()));
+    assert_eq!(opts.cache_enabled, false);
+
+    // CLI should override cache_enabled via effective_cache_setting -> simulate CLI enabling cache
+    let mut cli2 = cli.clone();
+    cli2.cache = true;
+    let opts2 = config::create_parse_options_from_cli(&cli2).unwrap();
+    assert_eq!(opts2.cache_enabled, true);
+
+    // restore XDG_CONFIG_HOME
+    if let Some(v) = prev_xdg {
+        std::env::set_var("XDG_CONFIG_HOME", v);
+    } else {
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
 }

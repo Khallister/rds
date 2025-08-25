@@ -4,13 +4,10 @@ use std::path::PathBuf;
 pub struct ParseOptions {
     pub context: PathBuf,
     pub extensions: Vec<String>,
-    pub js_extensions: Vec<String>,
-    pub vue_extensions: Vec<String>,
     pub include: Regex,
     pub exclude: Regex,
     pub dependency_exclude: Regex,
     pub tsconfig: Option<PathBuf>,
-    pub transform: bool,
     pub skip_dynamic_imports: SkipDynamicImports,
     pub progress_callback: Option<Box<dyn Fn(ProgressEvent, &str) + Send + Sync>>,
     pub take: Option<usize>,
@@ -22,13 +19,10 @@ impl std::fmt::Debug for ParseOptions {
         f.debug_struct("ParseOptions")
             .field("context", &self.context)
             .field("extensions", &self.extensions)
-            .field("js_extensions", &self.js_extensions)
-            .field("vue_extensions", &self.vue_extensions)
             .field("include", &self.include.as_str())
             .field("exclude", &self.exclude.as_str())
             .field("dependency_exclude", &self.dependency_exclude.as_str())
             .field("tsconfig", &self.tsconfig)
-            .field("transform", &self.transform)
             .field("skip_dynamic_imports", &self.skip_dynamic_imports)
             .field("progress_callback", &"<function>")
             .field("take", &self.take)
@@ -40,7 +34,6 @@ impl std::fmt::Debug for ParseOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SkipDynamicImports {
     Never,
-    Tree,
     Circular,
 }
 
@@ -64,14 +57,7 @@ impl Default for ParseOptions {
                 ".json".to_string(),
                 ".vue".to_string(),
             ],
-            js_extensions: vec![
-                ".ts".to_string(),
-                ".tsx".to_string(),
-                ".mjs".to_string(),
-                ".js".to_string(),
-                ".jsx".to_string(),
-            ],
-            vue_extensions: vec![".vue".to_string()],
+
             include: Regex::new(".*").unwrap(),
             exclude: Regex::new(
                 r"node_modules|\.git|\.svn|\.hg|coverage|dist|build|out|\.next|\.nuxt",
@@ -79,7 +65,7 @@ impl Default for ParseOptions {
             .unwrap(),
             dependency_exclude: Regex::new(r"node_modules|\.git|\.svn|\.hg").unwrap(),
             tsconfig: None,
-            transform: false,
+
             skip_dynamic_imports: SkipDynamicImports::Never,
             progress_callback: None,
             take: None,

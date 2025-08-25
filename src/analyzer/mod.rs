@@ -81,4 +81,8 @@ impl DependencyAnalyzer {
     pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
         self.tree_builder.get_incremental_cache_stats()
     }
+
+    pub fn options(&self) -> &ParseOptions {
+        &self.options
+    }
 }

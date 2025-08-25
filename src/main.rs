@@ -8,6 +8,7 @@ mod analyzer;
 mod cache;
 mod cli;
 mod filesystem;
+mod logger;
 mod output;
 mod parser;
 mod types;
@@ -37,12 +38,18 @@ async fn main() -> Result<()> {
     }
 
     if cli.watch {
+        logger::init(cli.log);
         WatchRunner::run_watch_mode(&cli).await
     } else {
         // register built-in parsers so runtime registry is populated for plugins/tests
         // Each parser advertises the extensions it handles; register them directly.
         register_parser(Arc::new(JavaScriptParser::new()?));
         register_parser(Arc::new(VueParser::new()?));
+
+        logger::init(cli.log);
+        if logger::enabled() {
+            logger::info(&format!("Starting run with files: {:?}", &cli.files));
+        }
 
         AnalysisRunner::run_analysis_once(&cli).await
     }

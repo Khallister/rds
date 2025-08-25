@@ -1,10 +1,10 @@
 {
   "name": "rds-analyzer",
-  "version": "0.4.6-alpha",
+  "version": "0.5.0-alpha",
   "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
   "main": "index.js",
   "bin": {
-    "rds": "./bin/rds.exe"
+    "rds": "./bin/run-rds.js"
   },
   "scripts": {
     "postinstall": "node install.js",
@@ -49,16 +49,19 @@
   ],
   "files": [
     "bin/",
+    "bin/run-rds.js",
     "install.js",
     "index.js",
     "README.md",
     "LICENSE"
   ],
+  "dependencies": {
+    "minimist": "^1.2.8"
+  },
   "devDependencies": {
     "husky": "^8.0.0",
     "prettier": "^3.6.2",
-    "lint-staged": "^13.1.0",
-    "minimist": "^1.2.8"
+    "lint-staged": "^13.1.0"
   },
   "optionalDependencies": {
     "archiver": "^5.3.1"

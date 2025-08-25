@@ -17,7 +17,7 @@ async fn test_build_dependency_tree_basic() -> anyhow::Result<()> {
 
     let mut options = ParseOptions::default();
     options.extensions = vec![".js".to_string()];
-    options.js_extensions = vec![".js".to_string()];
+    options.extensions = vec![".js".to_string()];
     options.context = td.path().to_path_buf();
 
     let (tree, _threads) = builder.build_dependency_tree(&entries, &options).await?;
@@ -178,7 +178,7 @@ async fn test_build_dependency_tree_incremental_cache_reuse() -> anyhow::Result<
 
     let mut options = ParseOptions::default();
     options.extensions = vec![".js".to_string()];
-    options.js_extensions = vec![".js".to_string()];
+    options.extensions = vec![".js".to_string()];
     options.cache_enabled = true;
 
     // run incremental once to populate last_analysis_cache
@@ -227,7 +227,7 @@ async fn test_build_dependency_tree_with_cached_results_resolves_deps() -> anyho
 
     let mut options = ParseOptions::default();
     options.extensions = vec![".js".to_string()];
-    options.js_extensions = vec![".js".to_string()];
+    options.extensions = vec![".js".to_string()];
     options.context = td.path().to_path_buf();
 
     let (tree, _threads) = builder.build_dependency_tree(&entries, &options).await?;
@@ -344,7 +344,7 @@ fn test_expand_entries_glob_dir_scans_directory() -> Result<()> {
     let mut opts = crate::types::config::ParseOptions::default();
     opts.context = base.to_path_buf();
     opts.extensions = vec![".js".to_string()];
-    opts.js_extensions = vec![".js".to_string()];
+    opts.extensions = vec![".js".to_string()];
 
     let entries = vec!["pack/*".to_string()];
     let res = super::expand::expand_entries(&entries, &opts)?;

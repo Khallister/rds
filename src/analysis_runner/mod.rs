@@ -11,6 +11,7 @@ use std::time::Instant;
 use crate::analyzer::DependencyAnalyzer;
 use crate::cli::Cli;
 use crate::filesystem::FileSystem;
+use crate::logger;
 use crate::output::{ConsoleOutput, JsonOutput};
 use crate::types::AnalysisResult;
 use crate::utils::{config, exit_codes};
@@ -20,11 +21,15 @@ pub struct AnalysisRunner;
 
 impl AnalysisRunner {
     pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
-        let show_progress = cli
-            .progress
-            .unwrap_or_else(|| atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err());
+        let show_progress = if cli.progress {
+            true
+        } else {
+            atty::is(atty::Stream::Stdout) && std::env::var("CI").is_err()
+        };
 
+        logger::debug(&format!("Expanding input files: {:?}", &cli.files));
         let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
+        logger::info(&format!("Found {} files to analyze", expanded_files.len()));
         if expanded_files.is_empty() {
             eprintln!("No files found matching the specified criteria");
             return Ok(());
@@ -40,6 +45,7 @@ impl AnalysisRunner {
                     .unwrap()
                     .progress_chars("█▉▊▋▌▍▎▏  "),
             );
+            logger::info("Progress bar enabled");
             Some(pb)
         } else {
             None
@@ -53,6 +59,7 @@ impl AnalysisRunner {
             }));
         }
 
+        logger::debug("Initializing DependencyAnalyzer");
         let mut analyzer = DependencyAnalyzer::new(options)?;
 
         let start_time = Instant::now();
@@ -61,9 +68,15 @@ impl AnalysisRunner {
                 "{}",
                 style("🚀 Starting dependency analysis...").bold().green()
             );
+            logger::info("Starting analysis (progress shown)");
         }
 
+        logger::debug(&format!(
+            "Beginning analysis of {} files",
+            expanded_files.len()
+        ));
         let (result, num_threads) = analyzer.analyze_files(&expanded_files).await?;
+        logger::info("Analysis completed");
 
         let cache_stats = analyzer.get_cache_stats();
 
@@ -71,6 +84,7 @@ impl AnalysisRunner {
 
         if let Some(pb) = progress_bar {
             pb.finish_with_message("Complete!");
+            logger::info("Progress bar finished");
         }
 
         println!(
@@ -130,7 +144,7 @@ impl AnalysisRunner {
         );
         println!();
 
-        let show_tree = cli.tree || (!cli.circular && !cli.tree);
+        let show_tree = cli.tree;
         let show_circular = cli.circular || (!cli.circular && !cli.tree);
 
         if show_tree {

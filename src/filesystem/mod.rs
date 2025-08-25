@@ -3,6 +3,7 @@
 //! This module handles file discovery, directory scanning, and file filtering
 //! operations used by the dependency analyzer.
 
+use crate::logger;
 use anyhow::Result;
 use std::path::Path;
 use tokio::fs;
@@ -14,6 +15,10 @@ impl FileSystem {
         inputs: &[String],
         filter: &Option<String>,
     ) -> Result<Vec<String>> {
+        logger::debug(&format!(
+            "expand_file_inputs called with {} inputs",
+            inputs.len()
+        ));
         let mut expanded_files = Vec::new();
 
         let filter_extensions: Option<Vec<String>> = filter.as_ref().map(|f| {
@@ -46,6 +51,11 @@ impl FileSystem {
 
         expanded_files.sort();
         expanded_files.dedup();
+
+        logger::info(&format!(
+            "expand_file_inputs returning {} files",
+            expanded_files.len()
+        ));
 
         Ok(expanded_files)
     }
