@@ -38,15 +38,13 @@ fn test_create_parse_options_from_cli_basic() {
         output: None,
         tree: false,
         circular: false,
-        warning: false,
         log: false,
         throw: false,
         tsconfig: None,
 
         exit_code: None,
-        progress: None,
-        detect_unused_files_from: None,
-        skip_dynamic_imports: None,
+        progress: false,
+        skip_dynamic_imports: false,
         take: None,
         watch: false,
         cache: false,
@@ -61,6 +59,7 @@ fn test_create_parse_options_from_cli_basic() {
 #[test]
 fn test_extract_relevant_file_changes_event() {
     use std::path::PathBuf;
+
     let ev = notify::Event {
         kind: EventKind::Modify(notify::event::ModifyKind::Any),
         paths: vec![PathBuf::from("a.js")],
@@ -114,7 +113,6 @@ fn test_is_relevant_file_change_no_extension() {
 
 #[test]
 fn test_create_parse_options_from_cli_skip_dynamic_variants() {
-    use crate::cli::SkipDynamicImportsArg;
     use crate::types::SkipDynamicImports;
 
     let mut cli = Cli {
@@ -127,15 +125,13 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
         output: None,
         tree: false,
         circular: false,
-        warning: false,
         log: false,
         throw: false,
         tsconfig: None,
 
         exit_code: None,
-        progress: None,
-        detect_unused_files_from: None,
-        skip_dynamic_imports: Some(SkipDynamicImportsArg::Tree),
+        progress: false,
+        skip_dynamic_imports: false,
         take: None,
         watch: false,
         cache: false,
@@ -144,9 +140,10 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
-    assert_eq!(opts.skip_dynamic_imports, SkipDynamicImports::Tree);
+    assert_eq!(opts.skip_dynamic_imports, SkipDynamicImports::Never);
 
-    cli.skip_dynamic_imports = Some(SkipDynamicImportsArg::Circular);
+    // set true -> Circular
+    cli.skip_dynamic_imports = true;
     let opts2 = config::create_parse_options_from_cli(&cli).unwrap();
     assert_eq!(opts2.skip_dynamic_imports, SkipDynamicImports::Circular);
 }
@@ -203,14 +200,13 @@ cache_enabled = false
         output: None,
         tree: false,
         circular: false,
-        warning: false,
+
         log: false,
         throw: false,
         tsconfig: None,
         exit_code: None,
-        progress: None,
-        detect_unused_files_from: None,
-        skip_dynamic_imports: None,
+        progress: false,
+        skip_dynamic_imports: false,
         take: None,
         watch: false,
         cache: false,

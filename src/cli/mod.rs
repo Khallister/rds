@@ -3,7 +3,7 @@
 //! This module contains the CLI argument definitions and related parsing logic,
 //! separated from the main application logic for better testability and maintainability.
 
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser, Clone, Debug)]
@@ -58,9 +58,6 @@ pub struct Cli {
     #[arg(long, action = clap::ArgAction::SetTrue, help = "Detect and show circular dependencies")]
     pub circular: bool,
 
-    #[arg(long, action = clap::ArgAction::SetTrue, help = "Show warning messages during analysis")]
-    pub warning: bool,
-
     #[arg(long, action = clap::ArgAction::SetTrue, help = "Enable verbose logging output")]
     pub log: bool,
 
@@ -73,18 +70,11 @@ pub struct Cli {
     #[arg(long, help = "Custom exit codes (format: 'case:code,case:code')")]
     pub exit_code: Option<String>,
 
-    #[arg(long, help = "Show progress bar (auto-detected if not specified)")]
-    pub progress: Option<bool>,
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Show progress bar (set when present; otherwise auto-detected)")]
+    pub progress: bool,
 
-    #[arg(long, help = "Pattern to detect unused files from")]
-    pub detect_unused_files_from: Option<String>,
-
-    #[arg(
-        long,
-        value_enum,
-        help = "Skip dynamic imports in tree or circular analysis"
-    )]
-    pub skip_dynamic_imports: Option<SkipDynamicImportsArg>,
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "Skip dynamic imports when detecting circular dependencies")]
+    pub skip_dynamic_imports: bool,
 
     #[arg(
         long,
@@ -104,12 +94,6 @@ pub struct Cli {
 
     #[arg(long, help = "Number of threads to use for parallel processing")]
     pub threads: Option<usize>,
-}
-
-#[derive(Clone, ValueEnum, Debug)]
-pub enum SkipDynamicImportsArg {
-    Tree,
-    Circular,
 }
 
 impl Cli {

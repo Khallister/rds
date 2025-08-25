@@ -65,28 +65,6 @@ impl ConsoleOutput {
             .to_string()
     }
 
-    fn print_node(
-        &self,
-        node_id: &str,
-        prefix: &str,
-        tree: &DependencyTree,
-        id_map: &mut HashMap<String, usize>,
-        id_counter: &mut usize,
-        digits: usize,
-        has_more: bool,
-    ) {
-        let _ = self.print_node_to(
-            &mut io::sink(),
-            node_id,
-            prefix,
-            tree,
-            id_map,
-            id_counter,
-            digits,
-            has_more,
-        );
-    }
-
     fn print_node_to<W: Write>(
         &self,
         writer: &mut W,

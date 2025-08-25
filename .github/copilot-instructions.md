@@ -32,7 +32,7 @@ Developer workflows & gotchas
   - `.husky/pre-commit` runs `cargo fmt --all` then `lint-staged` and restages formatting changes with `git add -u`.
   - `.husky/pre-push` runs `cargo test --lib` and aborts pushes on failure.
 - lint-staged caveat: it appends staged file paths to commands. Do not put `cargo test` in lint-staged (we run tests in pre-push instead).
-- Tests: unit tests live in `src/*/tests.rs` and use `tempfile::tempdir()` and platform-aware assertions (`#[cfg(unix)]` when needed).
+- Tests: unit tests always live in `src/*/tests.rs` (not in mod.rs files) and use `tempfile::tempdir()` and platform-aware assertions (`#[cfg(unix)]` when needed).
 
 Where to look first (examples)
 - Add parser: read `src/parser/plugins/javascript.rs`, then `src/parser/mod.rs` for registration and `src/parser/tests.rs` for runtime tests.

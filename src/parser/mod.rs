@@ -7,7 +7,6 @@ pub use resolver::ModuleResolver;
 
 use anyhow::Result;
 use once_cell::sync::Lazy;
-use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 /// Parser trait: implementors can parse a file content and return discovered dependencies.
@@ -45,14 +44,6 @@ static PARSER_REGISTRY: Lazy<RwLock<Vec<(Vec<String>, DynParser)>>> =
 pub struct ParserFactory;
 
 impl ParserFactory {
-    pub fn get_parser_for_path(path: &str) -> Result<Option<DynParser>> {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
-        Self::get_parser_for_extension(ext)
-    }
-
     pub fn get_parser_for_extension(ext: &str) -> Result<Option<DynParser>> {
         if let Some(p) = get_registered_parser_for_extension(ext) {
             return Ok(Some(p));
@@ -84,7 +75,7 @@ pub fn register_parser_for_extensions(exts: Vec<&str>, parser: DynParser) {
 /// to the per-extension registration API.
 pub fn register_parser(parser: DynParser) {
     let exts = parser.handled_extensions();
-    let mut refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+    let refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
     register_parser_for_extensions(refs, parser);
 }
 

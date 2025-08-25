@@ -68,7 +68,7 @@ fn is_relevant_file_change(path: &Path) -> bool {
 }
 
 pub mod config {
-    use crate::cli::{Cli, SkipDynamicImportsArg};
+    use crate::cli::Cli;
     use crate::types::{ParseOptions, SkipDynamicImports};
     use crate::utils::file_config;
     use anyhow::Result;
@@ -112,10 +112,10 @@ pub mod config {
         options.dependency_exclude = regex::Regex::new(r"node_modules|\\.git|\\.svn|\\.hg")?;
         options.tsconfig = cli.tsconfig.clone();
         options.take = cli.take;
-        options.skip_dynamic_imports = match cli.skip_dynamic_imports {
-            Some(SkipDynamicImportsArg::Tree) => SkipDynamicImports::Tree,
-            Some(SkipDynamicImportsArg::Circular) => SkipDynamicImports::Circular,
-            None => SkipDynamicImports::Never,
+        options.skip_dynamic_imports = if cli.skip_dynamic_imports {
+            SkipDynamicImports::Circular
+        } else {
+            SkipDynamicImports::Never
         };
         options.cache_enabled = cli.effective_cache_setting();
 

@@ -34,7 +34,6 @@ impl std::fmt::Debug for ParseOptions {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SkipDynamicImports {
     Never,
-    Tree,
     Circular,
 }
 

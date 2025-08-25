@@ -3,7 +3,7 @@ use crate::types::DependencyKind;
 
 #[test]
 fn test_js_parser_via_factory() {
-    let parser = ParserFactory::get_parser_for_path("/path/to/file.js")
+    let parser = ParserFactory::get_parser_for_extension("js")
         .unwrap()
         .unwrap();
     let content = "import x from './b.js';\nconst y = require('./c.js');";
@@ -18,7 +18,7 @@ fn test_js_parser_via_factory() {
 
 #[test]
 fn test_vue_parser_via_factory() {
-    let parser = ParserFactory::get_parser_for_path("/path/App.vue")
+    let parser = ParserFactory::get_parser_for_extension("vue")
         .unwrap()
         .unwrap();
     let content =
@@ -55,7 +55,7 @@ fn test_register_runtime_parser() {
     // register toy parser for `.foo`
     register_parser_for_extensions(vec!["foo"], Arc::new(ToyParser));
 
-    let p = ParserFactory::get_parser_for_path("/some/file.foo")
+    let p = ParserFactory::get_parser_for_extension("foo")
         .unwrap()
         .unwrap();
     let deps = p.parse_file("/some/file.foo", "").unwrap();

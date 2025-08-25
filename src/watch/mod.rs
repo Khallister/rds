@@ -12,6 +12,7 @@ use tokio::sync::mpsc;
 use crate::analyzer::DependencyAnalyzer;
 use crate::cli::Cli;
 use crate::filesystem::FileSystem;
+use crate::logger;
 use crate::output::ConsoleOutput;
 use crate::utils::{config, extract_relevant_file_changes};
 
@@ -26,7 +27,12 @@ impl WatchRunner {
             style("Press Ctrl+C to exit").dim()
         );
 
+        logger::debug(&format!("Watch mode expanding inputs: {:?}", &cli.files));
         let expanded_files = FileSystem::expand_file_inputs(&cli.files, &cli.filter).await?;
+        logger::info(&format!(
+            "Watch mode will monitor {} files",
+            expanded_files.len()
+        ));
         if expanded_files.is_empty() {
             eprintln!("No files found matching the specified criteria");
             return Ok(());
@@ -99,6 +105,7 @@ impl WatchRunner {
                     };
 
                     if !relevant_changes.is_empty() {
+                        logger::debug(&format!("Relevant changes: {:?}", &relevant_changes));
                         Self::apply_relevant_changes(
                             &mut changed_files,
                             &mut logged_files,
@@ -110,6 +117,7 @@ impl WatchRunner {
                 }
 
                 _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                    logger::debug("Debounce tick");
                     if !changed_files.is_empty() && last_change.elapsed() >= DEBOUNCE_DURATION {
                         let files_to_analyze: Vec<String> = changed_files.drain().collect();
                         logged_files.clear();
@@ -117,6 +125,7 @@ impl WatchRunner {
                         let analyzer = Arc::clone(&persistent_analyzer);
                         let cli_clone = cli.clone();
 
+                        logger::info(&format!("Triggering incremental analysis for {} files", files_to_analyze.len()));
                         analysis_task = Some(tokio::spawn(async move {
                             if let Err(e) = Self::run_incremental_analysis(
                                 analyzer,

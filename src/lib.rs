@@ -8,6 +8,7 @@ pub mod analyzer;
 pub mod cache;
 pub mod cli;
 pub mod filesystem;
+pub mod logger;
 pub mod output;
 pub mod parser;
 pub mod types;

@@ -128,6 +128,7 @@ impl TreeBuilder {
         self.cache.get_incremental_stats()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn cache_mut(&mut self) -> &mut FileCache {
         &mut self.cache
     }

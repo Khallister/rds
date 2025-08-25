@@ -12,7 +12,6 @@ pub struct FileConfig {
     pub cache_enabled: Option<bool>,
     pub take: Option<usize>,
     pub tsconfig: Option<String>,
-    pub skip_dynamic_imports: Option<String>,
 }
 
 // Load rds.config.toml from project root or user config directory.

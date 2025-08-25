@@ -5,7 +5,30 @@ const path = require("path");
 const https = require("https");
 const { spawnSync } = require("child_process");
 const VERSION = require("./package.json").version;
-const argv = require('minimist')(process.argv.slice(2));
+let argv;
+try {
+  argv = require('minimist')(process.argv.slice(2));
+} catch (err) {
+  // Fallback minimal parser for install-time convenience when dev deps
+  // (like minimist) are not installed. Supports --token/-t and --debug/-d
+  argv = {};
+  const raw = process.argv.slice(2);
+  for (let i = 0; i < raw.length; i++) {
+    const a = raw[i];
+    if (a === '--token' || a === '-t') {
+      argv.token = raw[i + 1];
+      i++;
+    } else if (a.startsWith('--token=')) {
+      argv.token = a.split('=')[1];
+    } else if (a === '--debug' || a === '-d') {
+      argv.debug = true;
+    } else if (a.startsWith('--debug=')) {
+      argv.debug = a.split('=')[1] === 'true';
+    } else if (!a.startsWith('-')) {
+      // ignore positional args for this script
+    }
+  }
+}
 const CLI_TOKEN = argv.token || argv.t || null;
 const DEBUG = argv.debug || argv.d || false;
 
