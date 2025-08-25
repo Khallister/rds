@@ -88,37 +88,36 @@ impl WatchRunner {
 
         loop {
             tokio::select! {
-                              Some(event) = rx.recv() => {
-                    let relevant_changes = extract_relevant_file_changes(&event, &expanded_files, &persistent_analyzer.lock().await.options().exclude);
+                Some(event) = rx.recv() => {
+                    let relevant_changes = {
+                        let analyzer_guard = persistent_analyzer.lock().await;
+                        extract_relevant_file_changes(
+                            &event,
+                            &expanded_files,
+                            &analyzer_guard.options().exclude,
+                        )
+                    };
 
                     if !relevant_changes.is_empty() {
-                        for file in relevant_changes {
-                            changed_files.insert(file.clone());
-
-                                                      if !logged_files.contains(&file) {
-                                println!("📝 File change detected: {}", style(&file).yellow());
-                                logged_files.insert(file);
-                            }
-                        }
-                        last_change = Instant::now();
-
-                                              if let Some(task) = analysis_task.take() {
-                            task.abort();
-                        }
+                        Self::apply_relevant_changes(
+                            &mut changed_files,
+                            &mut logged_files,
+                            &mut analysis_task,
+                            &mut last_change,
+                            relevant_changes,
+                        );
                     }
                 }
 
-                               _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
-                    if !changed_files.is_empty() &&
-                       last_change.elapsed() >= DEBOUNCE_DURATION {
-
+                _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                    if !changed_files.is_empty() && last_change.elapsed() >= DEBOUNCE_DURATION {
                         let files_to_analyze: Vec<String> = changed_files.drain().collect();
                         logged_files.clear();
 
-                                              let analyzer = Arc::clone(&persistent_analyzer);
+                        let analyzer = Arc::clone(&persistent_analyzer);
                         let cli_clone = cli.clone();
 
-                                              analysis_task = Some(tokio::spawn(async move {
+                        analysis_task = Some(tokio::spawn(async move {
                             if let Err(e) = Self::run_incremental_analysis(
                                 analyzer,
                                 files_to_analyze,
@@ -130,7 +129,7 @@ impl WatchRunner {
                     }
                 }
 
-                              _ = tokio::signal::ctrl_c() => {
+                _ = tokio::signal::ctrl_c() => {
                     println!("\n{}", style("🛑 Stopping watch mode...").yellow());
                     break;
                 }
@@ -191,6 +190,29 @@ impl WatchRunner {
         );
 
         Ok(())
+    }
+
+    fn apply_relevant_changes(
+        changed_files: &mut HashSet<String>,
+        logged_files: &mut HashSet<String>,
+        analysis_task: &mut Option<tokio::task::JoinHandle<()>>,
+        last_change: &mut Instant,
+        relevant_changes: Vec<String>,
+    ) {
+        for file in relevant_changes {
+            changed_files.insert(file.clone());
+
+            if !logged_files.contains(&file) {
+                println!("📝 File change detected: {}", style(&file).yellow());
+                logged_files.insert(file);
+            }
+        }
+
+        *last_change = Instant::now();
+
+        if let Some(task) = analysis_task.take() {
+            task.abort();
+        }
     }
 
     fn count_total_dependencies(tree: &crate::types::DependencyTree) -> usize {
