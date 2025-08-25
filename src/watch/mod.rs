@@ -89,7 +89,7 @@ impl WatchRunner {
         loop {
             tokio::select! {
                               Some(event) = rx.recv() => {
-                    let relevant_changes = extract_relevant_file_changes(&event, &expanded_files);
+                    let relevant_changes = extract_relevant_file_changes(&event, &expanded_files, &persistent_analyzer.lock().await.options().exclude);
 
                     if !relevant_changes.is_empty() {
                         for file in relevant_changes {

@@ -31,7 +31,11 @@ pub fn lexical_normalize_abs(path: &Path) -> PathBuf {
 pub mod file_config;
 pub mod path;
 
-pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -> Vec<String> {
+pub fn extract_relevant_file_changes(
+    event: &Event,
+    _watched_files: &[String],
+    exclude: &regex::Regex,
+) -> Vec<String> {
     let mut changed_files = Vec::new();
 
     match event.kind {
@@ -40,7 +44,7 @@ pub fn extract_relevant_file_changes(event: &Event, _watched_files: &[String]) -
         | notify::EventKind::Remove(_) => {
             for path in &event.paths {
                 if let Some(path_str) = path.to_str() {
-                    if is_relevant_file_change(path) {
+                    if is_relevant_file_change(path) && !exclude.is_match(path_str) {
                         changed_files.push(path_str.to_string());
                     }
                 }

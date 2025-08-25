@@ -126,7 +126,7 @@ impl Cli {
         let args: Vec<String> = std::env::args().collect();
         let has_test_flag = args
             .iter()
-            .any(|a| a == "--nocapture" || a == "--test-threads");
+            .any(|a| a == "--nocapture" || a == "--test-threads" || a == "--quiet");
         let non_flags: Vec<&str> = args
             .iter()
             .skip(1)

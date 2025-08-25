@@ -1,0 +1,10 @@
+{
+  "name": "vite-plugin-rds-watch",
+  "version": "0.1.0",
+  "description": "Vite plugin that runs a platform-dependent executable (e.g. rds) in watch mode alongside the dev server",
+  "main": "index.js",
+  "peerDependencies": {
+    "vite": "*"
+  },
+  "license": "MIT"
+}

@@ -67,7 +67,7 @@ fn test_extract_relevant_file_changes_event() {
         attrs: Default::default(),
     };
 
-    let changes = extract_relevant_file_changes(&ev, &[]);
+    let changes = extract_relevant_file_changes(&ev, &[], &regex::Regex::new(r"$^").unwrap());
     assert_eq!(changes, vec!["a.js".to_string()]);
 }
 
@@ -101,7 +101,7 @@ fn test_extract_relevant_file_changes_other_kind() {
         paths: vec![PathBuf::from("a.js")],
         attrs: Default::default(),
     };
-    let changes = extract_relevant_file_changes(&ev, &[]);
+    let changes = extract_relevant_file_changes(&ev, &[], &regex::Regex::new(r"$^").unwrap());
     // should be empty because Other is not Create/Modify/Remove
     assert!(changes.is_empty());
 }
