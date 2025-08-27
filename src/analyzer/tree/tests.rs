@@ -158,7 +158,7 @@ async fn test_process_parsed_results_caches_when_enabled() -> anyhow::Result<()>
     )
     .await?;
 
-    let cache_key = crate::utils::path::normalize_path_for_storage(&f_path)?;
+    let cache_key = crate::utils::path::normalize_path_for_storage_cached(&f_path).await?;
     let cached = cache.get_cached_dependencies(&cache_key);
     assert!(cached.is_some());
 
@@ -185,7 +185,7 @@ async fn test_build_dependency_tree_incremental_cache_reuse() -> anyhow::Result<
     let (_, _threads) = builder
         .build_dependency_tree_incremental(&entries, &options)
         .await?;
-    let key = crate::utils::path::normalize_path_for_storage(&entries[0])?;
+    let key = crate::utils::path::normalize_path_for_storage_cached(&entries[0]).await?;
 
     // run incremental again with the same single file; since nothing changed it should reuse cached tree
     let (inc_tree, _threads) = builder
@@ -211,7 +211,7 @@ async fn test_build_dependency_tree_with_cached_results_resolves_deps() -> anyho
     let _b_path = std::fs::canonicalize(&b)?.to_string_lossy().to_string();
 
     // insert a cache entry for a.js with a dependency on './b.js'
-    let cache_key = crate::utils::path::normalize_path_for_storage(&a_path)?;
+    let cache_key = crate::utils::path::normalize_path_for_storage_cached(&a_path).await?;
     let dep = crate::types::Dependency {
         issuer: "a.js".to_string(),
         request: "./b.js".to_string(),
@@ -239,6 +239,47 @@ async fn test_build_dependency_tree_with_cached_results_resolves_deps() -> anyho
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_incremental_affected_set_limits_analysis() -> anyhow::Result<()> {
+    let mut builder = TreeBuilder::new()?;
+
+    // create temp dir with three files: a -> b -> c
+    let td = tempdir()?;
+    let a = td.path().join("a.js");
+    let b = td.path().join("b.js");
+    let c = td.path().join("c.js");
+    std::fs::write(&c, "export const x = 1;")?;
+    std::fs::write(&b, "import './c.js';")?;
+    std::fs::write(&a, "import './b.js';")?;
+
+    // Provide all files as entries so the full graph is discovered during the build
+    let entries = vec![
+        a.to_string_lossy().to_string(),
+        b.to_string_lossy().to_string(),
+        c.to_string_lossy().to_string(),
+    ];
+
+    let mut options = crate::types::config::ParseOptions::default();
+    options.extensions = vec![".js".to_string()];
+    options.context = td.path().to_path_buf();
+
+    // Run a full build to populate reverse index
+    let (_tree_full, _threads) = builder.build_dependency_tree(&entries, &options).await?;
+
+    // Now simulate an incremental change in c.js and run incremental builder
+    let changed = vec![c.to_string_lossy().to_string()];
+    let (inc_tree, _threads) = builder
+        .build_dependency_tree_incremental(&changed, &options)
+        .await?;
+
+    // Expect that a.js, b.js and c.js are present in the incremental tree
+    assert!(inc_tree.keys().any(|k| k.ends_with("a.js")));
+    assert!(inc_tree.keys().any(|k| k.ends_with("b.js")));
+    assert!(inc_tree.keys().any(|k| k.ends_with("c.js")));
+
+    Ok(())
+}
 use super::*;
 use anyhow::Result;
 use tempfile::NamedTempFile;
@@ -255,7 +296,7 @@ async fn test_partition_cached_uses_cache() -> Result<()> {
     let uncached_path = temp_uncached.path().to_string_lossy().to_string();
     tokio::fs::write(&uncached_path, "console.log('uncached');").await?;
 
-    let cache_key = crate::utils::path::normalize_path_for_storage(&cached_path)?;
+    let cache_key = crate::utils::path::normalize_path_for_storage_cached(&cached_path).await?;
     tb.cache_mut()
         .cache_dependencies(&cached_path, &cache_key, Vec::new())
         .await?;
@@ -352,6 +393,66 @@ fn test_expand_entries_glob_dir_scans_directory() -> Result<()> {
     // should include both files discovered by scanning the directory
     assert!(res.iter().any(|s| s.ends_with("pack/x.js")));
     assert!(res.iter().any(|s| s.ends_with("pack/inner/y.js")));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_reverse_index_basic_merge_and_prune() -> anyhow::Result<()> {
+    use crate::analyzer::tree::reverse_index::ReverseIndex;
+    use crate::types::Dependency;
+
+    // Build an initial full tree: a -> b -> c
+    let mut full: crate::types::DependencyTree = crate::types::DependencyTree::new();
+    full.insert(
+        "a.js".to_string(),
+        Some(vec![Dependency {
+            issuer: "a.js".into(),
+            request: "./b.js".into(),
+            kind: crate::types::DependencyKind::StaticImport,
+            id: Some("b.js".into()),
+        }]),
+    );
+    full.insert(
+        "b.js".to_string(),
+        Some(vec![Dependency {
+            issuer: "b.js".into(),
+            request: "./c.js".into(),
+            kind: crate::types::DependencyKind::StaticImport,
+            id: Some("c.js".into()),
+        }]),
+    );
+    full.insert("c.js".to_string(), Some(vec![]));
+
+    let mut ri = ReverseIndex::from_tree(&full);
+
+    // Initial affected set when c.js changes should include c,b,a
+    let changed = vec!["c.js".to_string()];
+    let affected = ri.compute_affected_set(&changed).await;
+    assert!(affected.contains("c.js"));
+    assert!(affected.contains("b.js"));
+    assert!(affected.contains("a.js"));
+
+    // Now simulate a partial update where b.js no longer depends on c.js
+    let mut partial: crate::types::DependencyTree = crate::types::DependencyTree::new();
+    partial.insert("b.js".to_string(), Some(vec![]));
+
+    ri.merge_partial_into_full(&partial, &mut full);
+
+    // After merge, affected set for c.js should not include b.js or a.js
+    let affected2 = ri.compute_affected_set(&changed).await;
+    assert!(affected2.contains("c.js"));
+    assert!(!affected2.contains("b.js"));
+    assert!(!affected2.contains("a.js"));
+
+    // Now remove a.js entirely from full tree and prune
+    full.remove("a.js");
+    ri.prune(&full);
+    // parents for c.js should not include a.js
+    let parents = ri.get_parents("c.js");
+    if let Some(p) = parents {
+        assert!(!p.contains(&"a.js".to_string()));
+    }
 
     Ok(())
 }

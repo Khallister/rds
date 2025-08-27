@@ -53,9 +53,12 @@ impl AnalysisRunner {
 
         if let Some(ref pb) = progress_bar {
             let pb_clone = pb.clone();
-            options.progress_callback = Some(Box::new(move |_, msg| {
+            options.progress_callback = Some(Box::new(move |ev, msg| {
+                // Always update message. Only increment on End so Start/End don't double-count.
                 pb_clone.set_message(msg.to_string());
-                pb_clone.inc(1);
+                if let crate::types::ProgressEvent::End = ev {
+                    pb_clone.inc(1);
+                }
             }));
         }
 

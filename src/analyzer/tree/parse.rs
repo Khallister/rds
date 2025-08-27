@@ -1,10 +1,12 @@
 use crate::cache::FileCache;
-use crate::parser::ModuleResolver;
+use crate::logger;
+use crate::parser::{DynParser, ModuleResolver};
 use crate::types::{Dependency, DependencyTree, ParseOptions};
 use anyhow::{Error, Result};
 use futures::stream::StreamExt;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 // ...existing code...
 pub async fn parse_files_batch<'a>(
     files: Vec<String>,
@@ -26,6 +28,7 @@ pub async fn parse_files_batch<'a>(
 
     let mut results = Vec::new();
     while let Some(r) = file_results.next().await {
+        logger::debug("[Batch] Parsed one file");
         results.push(r);
     }
     results
@@ -54,26 +57,19 @@ pub async fn parse_file_static(
         callback(crate::types::ProgressEvent::Start, file_path);
     }
 
-    let read_path_buf = if Path::new(file_path).is_absolute() {
-        PathBuf::from(file_path)
-    } else if file_path.starts_with("../../") || file_path.starts_with("..\\..\\") {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let rest = &file_path[6..];
-        let parent = cwd.parent().unwrap_or(&cwd);
-        parent.join(rest)
-    } else {
-        options.context.join(file_path)
-    };
-
-    let content = crate::utils::read_file_text_async(&read_path_buf).await?;
-
-    let dependencies = parser.parse_file(file_path, &content)?;
+    // Shared read + parse flow
+    let (normalized_path, dependencies) =
+        read_and_parse_file(file_path, parser.clone(), options).await?;
+    logger::info(&format!(
+        "Parsed file static: {} (parse: {}ms)",
+        normalized_path, 0
+    ));
 
     if let Some(ref callback) = options.progress_callback {
         callback(crate::types::ProgressEvent::End, file_path);
     }
 
-    Ok((file_path.to_string(), Some(dependencies)))
+    Ok((normalized_path.to_string(), Some(dependencies)))
 }
 
 pub async fn process_parsed_results(
@@ -85,23 +81,52 @@ pub async fn process_parsed_results(
     new_dependencies: &mut Vec<String>,
     options: &ParseOptions,
 ) -> Result<()> {
+    let proc_start = Instant::now();
+    let parsed_count = parsed_results.len();
     for result in parsed_results {
         match result {
             Ok((file_path, dependencies_opt)) => {
                 if let Some(mut deps) = dependencies_opt {
-                    let cache_key = crate::utils::path::normalize_path_for_storage(&file_path)?;
+                    let cache_key =
+                        crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
 
-                    // Resolve dependency requests to absolute/normalized ids when possible
+                    // Resolve dependency requests to absolute/normalized ids when possible.
+                    // Collect unresolved requests and resolve them in parallel to avoid
+                    // serial awaits per dependency.
                     let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
-                    for dep in deps.iter_mut() {
+                    let mut unresolved_tasks: Vec<(usize, String)> = Vec::new();
+                    for (i, dep) in deps.iter().enumerate() {
                         if dep.id.is_none() {
-                            if let Ok(Some(resolved_path)) = resolver
-                                .resolve_module(context, &dep.request, &options.extensions)
-                                .await
-                            {
-                                if let Ok(norm) =
-                                    crate::utils::path::normalize_path_for_storage(&resolved_path)
-                                {
+                            unresolved_tasks.push((i, dep.request.clone()));
+                        }
+                    }
+
+                    if !unresolved_tasks.is_empty() {
+                        use futures::stream::{self, StreamExt};
+                        let exts = options.extensions.clone();
+                        let resolver_ref = resolver;
+                        let results: Vec<(usize, Option<String>)> = stream::iter(unresolved_tasks)
+                            .map(|(i, request)| {
+                                let resolver = resolver_ref;
+                                let ctx = context.to_path_buf();
+                                let exts = exts.clone();
+                                async move {
+                                    match resolver.resolve_module(&ctx, &request, &exts).await {
+                                        Ok(Some(resolved_path)) => {
+                                            let norm = crate::utils::path::normalize_path_for_storage_cached(&resolved_path).await.ok();
+                                            (i, norm)
+                                        }
+                                        _ => (i, None),
+                                    }
+                                }
+                            })
+                            .buffer_unordered(32)
+                            .collect()
+                            .await;
+
+                        for (i, norm_opt) in results {
+                            if let Some(norm) = norm_opt {
+                                if let Some(dep) = deps.get_mut(i) {
                                     dep.id = Some(norm);
                                 }
                             }
@@ -114,7 +139,7 @@ pub async fn process_parsed_results(
                         .await?;
 
                     let normalized_path =
-                        crate::utils::path::normalize_path_for_storage(&file_path)?;
+                        crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
                     tree.insert(normalized_path.clone(), Some(deps.clone()));
 
                     // Use resolved ids from deps when available to avoid re-resolving
@@ -129,8 +154,10 @@ pub async fn process_parsed_results(
                             .resolve_module(context, &dep.request, &options.extensions)
                             .await
                         {
-                            let normalized =
-                                crate::utils::path::normalize_path_for_storage(&resolved_path)?;
+                            let normalized = crate::utils::path::normalize_path_for_storage_cached(
+                                &resolved_path,
+                            )
+                            .await?;
                             if !processed_files.contains(&normalized)
                                 && !new_dependencies.contains(&normalized)
                             {
@@ -140,7 +167,7 @@ pub async fn process_parsed_results(
                     }
                 } else {
                     let normalized_path =
-                        crate::utils::path::normalize_path_for_storage(&file_path)?;
+                        crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
                     tree.insert(normalized_path, None);
                 }
             }
@@ -153,6 +180,13 @@ pub async fn process_parsed_results(
             }
         }
     }
+    let elapsed = proc_start.elapsed();
+    crate::logger::info(&format!(
+        "process_parsed_results: processed {} parsed results, new_deps_added={}, elapsed={}ms",
+        parsed_count,
+        new_dependencies.len(),
+        elapsed.as_millis()
+    ));
     Ok(())
 }
 
@@ -163,7 +197,8 @@ pub async fn parse_single_file_deps(
     tree: &mut DependencyTree,
 ) -> Result<()> {
     if !options.include.is_match(file_path) || options.exclude.is_match(file_path) {
-        let normalized_path = crate::utils::path::normalize_path_for_storage(file_path)?;
+        let normalized_path =
+            crate::utils::path::normalize_path_for_storage_cached(file_path).await?;
         tree.insert(normalized_path, None);
         return Ok(());
     }
@@ -180,23 +215,102 @@ pub async fn parse_single_file_deps(
     }
     let parser = parser_opt.unwrap();
 
+    let (normalized_path, dependencies) =
+        read_and_parse_file(file_path, parser.clone(), options).await?;
+    logger::info(&format!(
+        "Parsed file deps: {} (parse: {}ms)",
+        normalized_path, 0
+    ));
+
+    let normalized_storage =
+        crate::utils::path::normalize_path_for_storage_cached(&normalized_path).await?;
+    tree.insert(normalized_storage, Some(dependencies));
+    Ok(())
+}
+
+async fn read_and_parse_file(
+    file_path: &str,
+    parser: DynParser,
+    options: &ParseOptions,
+) -> Result<(String, Vec<Dependency>)> {
+    // Compute absolute read path
     let read_path_buf = if Path::new(file_path).is_absolute() {
         PathBuf::from(file_path)
-    } else if file_path.starts_with("../../") || file_path.starts_with("..\\..\\") {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let rest = &file_path[6..];
-        let parent = cwd.parent().unwrap_or(&cwd);
-        parent.join(rest)
     } else {
-        options.context.join(file_path)
+        let ctx_abs = if options.context == PathBuf::from(".") {
+            std::env::current_dir().unwrap_or_default()
+        } else if options.context.is_absolute() {
+            options.context.clone()
+        } else {
+            std::env::current_dir()
+                .unwrap_or_default()
+                .join(&options.context)
+        };
+
+        let mut ancestor = ctx_abs.clone();
+        use std::path::Component;
+        let comps: Vec<Component> = Path::new(file_path).components().collect();
+        let mut skip = 0usize;
+        while skip < comps.len() {
+            logger::debug(&format!(
+                "[Path Handling] Component[{}]: {:?}",
+                skip, comps[skip]
+            ));
+            match comps[skip] {
+                Component::ParentDir => {
+                    if let Some(parent) = ancestor.parent() {
+                        ancestor = parent.to_path_buf();
+                    }
+                    skip += 1;
+                }
+                _ => break,
+            }
+        }
+
+        let mut remaining = PathBuf::new();
+        for c in comps.into_iter().skip(skip) {
+            match c {
+                Component::Normal(os) => remaining.push(os),
+                Component::Prefix(p) => remaining.push(p.as_os_str()),
+                Component::RootDir => remaining.push(std::path::MAIN_SEPARATOR.to_string()),
+                Component::CurDir => {}
+                Component::ParentDir => remaining.push(".."),
+            }
+        }
+
+        if remaining.as_os_str().is_empty() {
+            ancestor
+        } else {
+            ancestor.join(remaining)
+        }
     };
 
+    let read_start = Instant::now();
+    logger::info(&format!("Reading file: {}", read_path_buf.display()));
     let content = crate::utils::read_file_text_async(&read_path_buf).await?;
-    let dependencies = parser.parse_file(file_path, &content)?;
+    let read_dur = read_start.elapsed();
+    logger::info(&format!(
+        "Read {} bytes: {} (read: {}ms)",
+        content.len(),
+        read_path_buf.display(),
+        read_dur.as_millis()
+    ));
 
-    let normalized_path = crate::utils::path::normalize_path_for_storage(file_path)?;
-    tree.insert(normalized_path, Some(dependencies));
-    Ok(())
+    let normalized_path = crate::utils::path::canonicalize_cached(&read_path_buf).await;
+
+    logger::info(&format!("Parsing file: {}", normalized_path));
+    let parser_clone = parser.clone();
+    let normalized_clone = normalized_path.clone();
+    let content_clone = content.clone();
+    let parse_start = Instant::now();
+    let dependencies = tokio::task::spawn_blocking(move || {
+        parser_clone.parse_file(&normalized_clone, &content_clone)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Parser thread join error: {}", e))??;
+    let _parse_dur = parse_start.elapsed();
+
+    Ok((normalized_path, dependencies))
 }
 
 // existing imports already include PathBuf

@@ -26,7 +26,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse_args();
+    let mut cli = Cli::parse_args();
 
     if let Err(e) = cli.validate() {
         eprintln!("Error: {}", e);
@@ -38,6 +38,10 @@ async fn main() -> Result<()> {
     }
 
     if cli.watch {
+        if cli.throw {
+            eprintln!("Warning: --throw is ignored when used with --watch. Continuing in watch mode without exiting on circulars.");
+            cli.throw = false;
+        }
         logger::init(cli.log);
         WatchRunner::run_watch_mode(&cli).await
     } else {

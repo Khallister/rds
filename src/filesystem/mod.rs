@@ -74,6 +74,7 @@ impl FileSystem {
 
             while let Some(entry) = read_dir.next_entry().await? {
                 let path = entry.path();
+                logger::debug(&format!("Scanning path: {:?}", path));
 
                 if path.is_dir() {
                     if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {

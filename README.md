@@ -22,6 +22,10 @@ A compact, developer-focused dependency analyzer for JavaScript, TypeScript, and
 
   `rds src/ --take 1 --throw`
 
+- Run watch mode but first perform a full scan to ensure there are no pre-existing circulars:
+
+  `rds src/ --watch --pre-scan`
+
 ## Core flags (condensed)
 - `<FILES>...` — files or directories to analyze (required)
 - `--tree` — show dependency tree (opt-in)
@@ -32,6 +36,10 @@ A compact, developer-focused dependency analyzer for JavaScript, TypeScript, and
 - `--cache` / `--no-cache` — control file caching (default: enabled for `--watch`)
 - `--log` — enable verbose logging
 - `-o, --output <FILE>` — write results to JSON
+- `--resolve-concurrency <N>` — limit concurrent module resolution tasks (defaults to automatic tuning). Use this to control IO/concurrency during large analyses.
+- `--pre-scan` — when used with `--watch`, run a full initial analysis (circulars/tree) before starting watch mode; useful to ensure no existing circular dependencies are present since watch only re-scans changed files.
+
+Note: If you use `--watch`, the `--throw` option is ignored. Watch mode is long-running and intended to keep the process alive while monitoring changes, so the tool will not exit the process on circulars when running under `--watch`. If you need a failing CI-style run, use `--take`/`--throw` without `--watch` or use `--pre-scan` with `--watch` and run a separate short-lived check.
 
 ## Developer notes
 - CLI implementation: `src/cli/mod.rs` (current flags & defaults)

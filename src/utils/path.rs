@@ -1,5 +1,9 @@
+use crate::utils::lexical_normalize_abs;
 use anyhow::Context;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tokio::sync::RwLock;
 
 /// Normalize a path for storage in the dependency tree. This mirrors previous
 /// behavior from `TreeBuilder::normalize_path_for_storage` but is now testable
@@ -52,6 +56,58 @@ pub fn normalize_path_for_storage(path: &str) -> anyhow::Result<String> {
 
         return Ok(abs_stripped);
     }
+}
+
+// Simple in-memory cache for normalized paths to avoid repeated filesystem
+// canonicalize and normalization work across incremental runs.
+static NORMALIZE_CACHE: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+// Cache for canonicalize results (path -> canonicalized string)
+static CANONICALIZE_CACHE: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
+
+/// Async cached canonicalize helper used by async code paths to avoid repeated
+/// filesystem canonicalize calls. Falls back to lexical normalization on error.
+pub async fn canonicalize_cached(path: &std::path::Path) -> String {
+    let key = path.to_string_lossy().to_string();
+    {
+        let read = CANONICALIZE_CACHE.read().await;
+        if let Some(v) = read.get(&key) {
+            return v.clone();
+        }
+    }
+
+    let attempted = tokio::fs::canonicalize(path)
+        .await
+        .unwrap_or_else(|_| lexical_normalize_abs(path));
+
+    let mut s = attempted.to_string_lossy().to_string();
+    if cfg!(windows) {
+        if s.starts_with(r"\\?\") {
+            s = s[4..].to_string();
+        }
+    }
+    let normalized = s.replace('\\', "/");
+    let mut write = CANONICALIZE_CACHE.write().await;
+    write.insert(key, normalized.clone());
+    normalized
+}
+
+pub async fn normalize_path_for_storage_cached(path: &str) -> anyhow::Result<String> {
+    // Fast path: check cache
+    {
+        let read = NORMALIZE_CACHE.read().await;
+        if let Some(v) = read.get(path) {
+            return Ok(v.clone());
+        }
+    }
+
+    // Compute and store
+    let normalized = normalize_path_for_storage(path)?;
+    let mut write = NORMALIZE_CACHE.write().await;
+    write.insert(path.to_string(), normalized.clone());
+    Ok(normalized)
 }
 
 #[cfg(test)]

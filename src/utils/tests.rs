@@ -50,6 +50,8 @@ fn test_create_parse_options_from_cli_basic() {
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
@@ -137,6 +139,8 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
@@ -212,6 +216,8 @@ cache_enabled = false
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();

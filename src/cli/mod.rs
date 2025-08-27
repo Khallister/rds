@@ -85,6 +85,10 @@ pub struct Cli {
     #[arg(short = 'W', long, action = clap::ArgAction::SetTrue, help = "Watch mode: monitor files for changes and re-run analysis")]
     pub watch: bool,
 
+    /// When used with --watch, perform a full initial scan (circulars/tree) before entering watch mode
+    #[arg(long, action = clap::ArgAction::SetTrue, help = "When used with --watch, perform a full initial scan before starting watch mode")]
+    pub pre_scan: bool,
+
     #[arg(long, action = clap::ArgAction::SetTrue, help = "Enable file caching to speed up repeated analysis (enabled by default when --watch unless --no-cache)")]
     pub cache: bool,
 
@@ -94,6 +98,11 @@ pub struct Cli {
 
     #[arg(long, help = "Number of threads to use for parallel processing")]
     pub threads: Option<usize>,
+    #[arg(
+        long,
+        help = "Concurrency limit for module resolution (overrides automatic default)"
+    )]
+    pub resolve_concurrency: Option<usize>,
 }
 
 impl Cli {
