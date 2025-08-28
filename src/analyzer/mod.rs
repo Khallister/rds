@@ -82,6 +82,17 @@ impl DependencyAnalyzer {
         self.tree_builder.get_incremental_cache_stats()
     }
 
+    /// Invalidate caches related to the provided paths. Async because
+    /// resolver operations are async.
+    pub async fn invalidate_caches(&mut self, paths: &[String]) {
+        self.tree_builder.invalidate_caches(paths).await;
+    }
+
+    /// Clear all analyzer-related caches.
+    pub async fn clear_all_caches(&mut self) {
+        self.tree_builder.clear_all_caches().await;
+    }
+
     pub fn options(&self) -> &ParseOptions {
         &self.options
     }

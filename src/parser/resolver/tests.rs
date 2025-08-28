@@ -277,3 +277,42 @@ async fn test_append_suffix_try_extensions() -> Result<()> {
     assert!(resolved.is_some());
     Ok(())
 }
+
+#[tokio::test]
+async fn test_invalidate_paths_clears_caches() -> Result<()> {
+    let td = tempdir()?;
+    let project = td.path();
+
+    // create a simple file and a package.json to exercise node resolution
+    let nm = project.join("node_modules").join("pkg");
+    std::fs::create_dir_all(nm.join("lib"))?;
+    std::fs::write(nm.join("lib").join("index.js"), "module.exports = {};")?;
+    std::fs::write(nm.join("package.json"), r#"{"main":"lib/index.js"}"#)?;
+
+    let r = ModuleResolver::new();
+
+    // Resolve once to populate caches
+    let resolved = r
+        .resolve_node_module(project, "pkg", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved.is_some());
+
+    // Now remove the file on disk to simulate external change
+    std::fs::remove_file(nm.join("lib").join("index.js"))?;
+
+    // Invalidate caches for the removed path
+    let removed_path = nm
+        .join("lib")
+        .join("index.js")
+        .to_string_lossy()
+        .to_string();
+    r.invalidate_paths(&vec![removed_path.clone()]).await;
+
+    // After invalidation, resolver should no longer resolve the module (file missing)
+    let resolved2 = r
+        .resolve_node_module(project, "pkg", &vec![".js".to_string()])
+        .await?;
+    assert!(resolved2.is_none());
+
+    Ok(())
+}

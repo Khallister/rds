@@ -118,6 +118,7 @@ pub mod config {
             SkipDynamicImports::Never
         };
         options.cache_enabled = cli.effective_cache_setting();
+        options.resolve_concurrency = cli.resolve_concurrency;
 
         Ok(options)
     }
@@ -178,11 +179,8 @@ pub mod exit_codes {
 pub async fn read_file_text_async(path: &Path) -> anyhow::Result<String> {
     let cwd = env::current_dir().unwrap_or_default();
 
-    let attempted_fs = tokio::fs::canonicalize(path).await;
-    let attempted = match attempted_fs {
-        Ok(p) => p,
-        Err(_) => lexical_normalize_abs(path),
-    };
+    let attempted_s = crate::utils::path::canonicalize_cached(path).await;
+    let attempted = std::path::PathBuf::from(attempted_s);
 
     tokio_fs::read_to_string(&attempted).await.with_context(|| {
         format!(

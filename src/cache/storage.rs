@@ -72,6 +72,7 @@ impl FileCache {
         cache_key: &str,
         dependencies: Vec<Dependency>,
     ) -> Result<()> {
+        let start = std::time::Instant::now();
         if !self.enabled {
             return Ok(());
         }
@@ -101,6 +102,15 @@ impl FileCache {
         };
 
         self.cache.insert(cache_key.to_string(), entry);
+        if std::env::var("RDS_WATCH_DEBUG").is_ok() {
+            let elapsed = start.elapsed();
+            eprintln!(
+                "[cache] cache_dependencies: fs_path='{}' cache_key='{}' elapsed={}ms",
+                fs_path,
+                cache_key,
+                elapsed.as_millis()
+            );
+        }
         Ok(())
     }
 
@@ -108,6 +118,14 @@ impl FileCache {
         self.cache.clear();
         self.hits = 0;
         self.misses = 0;
+    }
+
+    /// Invalidate specific cache entries by path or cache_key.
+    pub fn invalidate_paths(&mut self, paths: &[String]) {
+        for p in paths {
+            // Remove both normalized and raw keys if present
+            self.cache.remove(p);
+        }
     }
 
     pub fn get_stats(&self) -> CacheStats {

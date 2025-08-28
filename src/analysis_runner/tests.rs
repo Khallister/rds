@@ -69,6 +69,8 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     // call the private display function directly
@@ -108,6 +110,8 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     let res = AnalysisRunner::run_analysis_once(&cli).await?;
@@ -146,6 +150,8 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
         cache: false,
         no_cache: false,
         threads: Some(1),
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     // should not exit even though exit_code is specified because there are no circulars
@@ -187,6 +193,8 @@ async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Resul
         cache: false,
         no_cache: false,
         threads: Some(1),
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     let res = AnalysisRunner::run_analysis_once(&cli).await?;
@@ -231,6 +239,8 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     AnalysisRunner::display_analysis_results(
@@ -277,6 +287,8 @@ async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<
         cache: false,
         no_cache: false,
         threads: Some(1),
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     // should complete without error

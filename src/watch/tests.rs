@@ -32,10 +32,12 @@ async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<(
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
     // changed_files empty should exercise analyze_files_incremental empty path
-    WatchRunner::run_incremental_analysis(analyzer, Vec::new(), &cli).await?;
+    WatchRunner::run_incremental_analysis(analyzer, Vec::new(), Vec::new(), &cli).await?;
     Ok(())
 }
 
@@ -67,9 +69,11 @@ async fn test_run_incremental_analysis_print_tree_only() -> anyhow::Result<()> {
         cache: false,
         no_cache: false,
         threads: None,
+        resolve_concurrency: None,
+        pre_scan: false,
     };
 
-    WatchRunner::run_incremental_analysis(analyzer, Vec::new(), &cli).await?;
+    WatchRunner::run_incremental_analysis(analyzer, Vec::new(), Vec::new(), &cli).await?;
     Ok(())
 }
 

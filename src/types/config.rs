@@ -12,6 +12,26 @@ pub struct ParseOptions {
     pub progress_callback: Option<Box<dyn Fn(ProgressEvent, &str) + Send + Sync>>,
     pub take: Option<usize>,
     pub cache_enabled: bool,
+    pub resolve_concurrency: Option<usize>,
+}
+
+impl Clone for ParseOptions {
+    fn clone(&self) -> Self {
+        Self {
+            context: self.context.clone(),
+            extensions: self.extensions.clone(),
+            include: self.include.clone(),
+            exclude: self.exclude.clone(),
+            dependency_exclude: self.dependency_exclude.clone(),
+            tsconfig: self.tsconfig.clone(),
+            skip_dynamic_imports: self.skip_dynamic_imports.clone(),
+            // progress_callback intentionally not cloned to avoid cloning trait objects
+            progress_callback: None,
+            take: self.take,
+            cache_enabled: self.cache_enabled,
+            resolve_concurrency: self.resolve_concurrency,
+        }
+    }
 }
 
 impl std::fmt::Debug for ParseOptions {
@@ -70,6 +90,7 @@ impl Default for ParseOptions {
             progress_callback: None,
             take: None,
             cache_enabled: true,
+            resolve_concurrency: None,
         }
     }
 }
