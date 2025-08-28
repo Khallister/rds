@@ -61,9 +61,10 @@ async fn test_expand_file_inputs_with_dir_file_and_nonexistent() -> anyhow::Resu
 
     // should include both files and the explicit nonexistent entry
     assert!(res.iter().any(|s| s.ends_with("a.js")));
-    assert!(res
-        .iter()
-        .any(|s| s.ends_with("sub/b.ts") || s.ends_with("sub\\b.ts")));
+    assert!(
+        res.iter()
+            .any(|s| s.ends_with("sub/b.ts") || s.ends_with("sub\\b.ts"))
+    );
     assert!(res.iter().any(|s| s == "nonexistent.foo"));
 
     Ok(())

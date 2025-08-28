@@ -21,7 +21,21 @@ impl ConsoleOutput {
         tree: &DependencyTree,
         entries: &[String],
     ) -> io::Result<()> {
-        writeln!(writer, "{}", style("🌳 Dependencies Tree").bold().cyan())?;
+        // Use emoji if supported, otherwise fallback to ASCII
+        let tree_icon = std::env::var("RDS_TREE_ICON").unwrap_or_else(|_| {
+            if atty::is(atty::Stream::Stdout) && console::user_attended() {
+                "🌳".to_string()
+            } else {
+                "*".to_string()
+            }
+        });
+        writeln!(
+            writer,
+            "{}",
+            style(format!("{} Dependencies Tree", tree_icon))
+                .bold()
+                .cyan()
+        )?;
 
         let mut id_map = HashMap::new();
         let mut id_counter = 0;

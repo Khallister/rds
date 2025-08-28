@@ -72,6 +72,7 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
         resolve_concurrency: None,
         pre_scan: false,
         debounce: None,
+        max_depth: 128,
     };
 
     // call the private display function directly
@@ -114,6 +115,7 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
         resolve_concurrency: None,
         pre_scan: false,
         debounce: None,
+        max_depth: 128,
     };
 
     let res = AnalysisRunner::run_analysis_once(&cli).await?;
@@ -155,6 +157,7 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
         resolve_concurrency: None,
         pre_scan: false,
         debounce: None,
+        max_depth: 128,
     };
 
     // should not exit even though exit_code is specified because there are no circulars
@@ -171,41 +174,42 @@ async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Resul
     let file_path_s = file_path.to_string_lossy().to_string();
 
     // set CI env to force show_progress -> false when progress is None
-    std::env::set_var("CI", "1");
+    temp_env::async_with_vars([("CI", Some("1"))], async {
+        let cli = Cli {
+            files: vec![file_path_s.clone()],
+            context: None,
+            extensions: ".js".to_string(),
 
-    let cli = Cli {
-        files: vec![file_path_s.clone()],
-        context: None,
-        extensions: ".js".to_string(),
+            filter: None,
+            include: ".*".to_string(),
+            exclude: "node_modules|\\.git".to_string(),
+            output: None,
+            tree: false,
+            circular: false,
+            log: false,
+            throw: false,
+            tsconfig: None,
 
-        filter: None,
-        include: ".*".to_string(),
-        exclude: "node_modules|\\.git".to_string(),
-        output: None,
-        tree: false,
-        circular: false,
-        log: false,
-        throw: false,
-        tsconfig: None,
+            exit_code: None,
+            progress: false,
+            skip_dynamic_imports: false,
+            take: None,
+            watch: false,
+            cache: false,
+            no_cache: false,
+            threads: Some(1),
+            resolve_concurrency: None,
+            pre_scan: false,
+            debounce: None,
+            max_depth: 128,
+        };
 
-        exit_code: None,
-        progress: false,
-        skip_dynamic_imports: false,
-        take: None,
-        watch: false,
-        cache: false,
-        no_cache: false,
-        threads: Some(1),
-        resolve_concurrency: None,
-        pre_scan: false,
-        debounce: None,
-    };
+        let res = AnalysisRunner::run_analysis_once(&cli).await?;
+        let _ = res;
 
-    let res = AnalysisRunner::run_analysis_once(&cli).await?;
-    let _ = res;
-
-    // cleanup env
-    std::env::remove_var("CI");
+        Ok::<(), anyhow::Error>(())
+    })
+    .await?;
 
     Ok(())
 }
@@ -246,6 +250,7 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         resolve_concurrency: None,
         pre_scan: false,
         debounce: None,
+        max_depth: 128,
     };
 
     AnalysisRunner::display_analysis_results(
@@ -295,6 +300,7 @@ async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<
         resolve_concurrency: None,
         pre_scan: false,
         debounce: None,
+        max_depth: 128,
     };
 
     // should complete without error

@@ -59,10 +59,11 @@ async fn test_parse_single_file_deps_excluded_inserts_none() -> anyhow::Result<(
     .await?;
 
     assert!(tree.keys().any(|k| k.ends_with("exclude_me.js")));
-    assert!(tree
-        .get("exclude_me.js")
-        .map(|v| v.is_none())
-        .unwrap_or(false));
+    assert!(
+        tree.get("exclude_me.js")
+            .map(|v| v.is_none())
+            .unwrap_or(false)
+    );
 
     Ok(())
 }
@@ -531,8 +532,8 @@ async fn test_parse_files_batch_error_when_read_fails() -> anyhow::Result<()> {
         ) -> anyhow::Result<Vec<crate::types::Dependency>> {
             Ok(vec![])
         }
-        fn handled_extensions(&self) -> Vec<String> {
-            vec!["err".to_string()]
+        fn handled_extensions(&self) -> &'static [&'static str] {
+            &["err"]
         }
     }
 

@@ -124,7 +124,7 @@ impl ModuleResolver {
             let keys_to_remove: Vec<String> = cache_write
                 .iter()
                 .filter_map(|(k, v)| {
-                    if let Some(ref val) = v {
+                    if let Some(val) = v {
                         if val == &np || val == p {
                             Some(k.clone())
                         } else {

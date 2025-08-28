@@ -1,6 +1,6 @@
 use super::*;
 use crate::types::{AnalysisResult, Dependency, DependencyKind};
-use serde_json::{from_value, to_value, Value};
+use serde_json::{Value, from_value, to_value};
 use std::collections::HashMap;
 use tempfile::NamedTempFile;
 

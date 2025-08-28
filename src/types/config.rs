@@ -13,6 +13,7 @@ pub struct ParseOptions {
     pub take: Option<usize>,
     pub cache_enabled: bool,
     pub resolve_concurrency: Option<usize>,
+    pub max_depth: usize,
 }
 
 impl Clone for ParseOptions {
@@ -30,6 +31,7 @@ impl Clone for ParseOptions {
             take: self.take,
             cache_enabled: self.cache_enabled,
             resolve_concurrency: self.resolve_concurrency,
+            max_depth: self.max_depth,
         }
     }
 }
@@ -91,6 +93,7 @@ impl Default for ParseOptions {
             take: None,
             cache_enabled: true,
             resolve_concurrency: None,
+            max_depth: 128,
         }
     }
 }

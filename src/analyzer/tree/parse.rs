@@ -8,6 +8,36 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 // ...existing code...
+async fn resolve_unresolved_tasks(
+    tasks: Vec<(usize, String)>,
+    resolver: &ModuleResolver,
+    context: std::path::PathBuf,
+    exts: Vec<String>,
+) -> Vec<(usize, Option<String>)> {
+    use futures::stream::{self, StreamExt};
+    let resolver_ref = resolver;
+    stream::iter(tasks)
+        .map(move |(i, request)| {
+            let resolver = resolver_ref;
+            let ctx = context.clone();
+            let exts = exts.clone();
+            async move {
+                match resolver.resolve_module(&ctx, &request, &exts).await {
+                    Ok(Some(resolved_path)) => {
+                        let norm =
+                            crate::utils::path::normalize_path_for_storage_cached(&resolved_path)
+                                .await
+                                .ok();
+                        (i, norm)
+                    }
+                    _ => (i, None),
+                }
+            }
+        })
+        .buffer_unordered(32)
+        .collect()
+        .await
+}
 pub async fn parse_files_batch<'a>(
     files: Vec<String>,
     options: &'a ParseOptions,
@@ -102,28 +132,14 @@ pub async fn process_parsed_results(
                     }
 
                     if !unresolved_tasks.is_empty() {
-                        use futures::stream::{self, StreamExt};
                         let exts = options.extensions.clone();
-                        let resolver_ref = resolver;
-                        let results: Vec<(usize, Option<String>)> = stream::iter(unresolved_tasks)
-                            .map(|(i, request)| {
-                                let resolver = resolver_ref;
-                                let ctx = context.to_path_buf();
-                                let exts = exts.clone();
-                                async move {
-                                    match resolver.resolve_module(&ctx, &request, &exts).await {
-                                        Ok(Some(resolved_path)) => {
-                                            let norm = crate::utils::path::normalize_path_for_storage_cached(&resolved_path).await.ok();
-                                            (i, norm)
-                                        }
-                                        _ => (i, None),
-                                    }
-                                }
-                            })
-                            .buffer_unordered(32)
-                            .collect()
-                            .await;
-
+                        let results = resolve_unresolved_tasks(
+                            unresolved_tasks,
+                            resolver,
+                            context.to_path_buf(),
+                            exts,
+                        )
+                        .await;
                         for (i, norm_opt) in results {
                             if let Some(norm) = norm_opt {
                                 if let Some(dep) = deps.get_mut(i) {

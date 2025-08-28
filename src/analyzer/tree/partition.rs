@@ -2,14 +2,16 @@ use crate::cache::FileCache;
 use crate::types::ParseOptions;
 use anyhow::Result;
 
+type PartitionResult = (
+    Vec<(String, Option<Vec<crate::types::Dependency>>)>,
+    Vec<String>,
+);
+
 pub async fn partition_cached(
     cache: &mut FileCache,
     unprocessed: Vec<String>,
     _options: &ParseOptions,
-) -> Result<(
-    Vec<(String, Option<Vec<crate::types::Dependency>>)>,
-    Vec<String>,
-)> {
+) -> Result<PartitionResult> {
     let start = std::time::Instant::now();
     let mut cached_results = Vec::new();
     let mut files_to_parse = Vec::new();

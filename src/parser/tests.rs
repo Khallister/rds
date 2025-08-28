@@ -8,12 +8,14 @@ fn test_js_parser_via_factory() {
         .unwrap();
     let content = "import x from './b.js';\nconst y = require('./c.js');";
     let deps = parser.parse_file("/path/to/file.js", content).unwrap();
-    assert!(deps
-        .iter()
-        .any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::StaticImport));
-    assert!(deps
-        .iter()
-        .any(|d| d.request.ends_with("./c.js") && d.kind == DependencyKind::CommonJS));
+    assert!(
+        deps.iter()
+            .any(|d| d.request.ends_with("./b.js") && d.kind == DependencyKind::StaticImport)
+    );
+    assert!(
+        deps.iter()
+            .any(|d| d.request.ends_with("./c.js") && d.kind == DependencyKind::CommonJS)
+    );
 }
 
 #[test]
@@ -47,8 +49,8 @@ fn test_register_runtime_parser() {
                 id: None,
             }])
         }
-        fn handled_extensions(&self) -> Vec<String> {
-            vec!["foo".to_string()]
+        fn handled_extensions(&self) -> &'static [&'static str] {
+            &["foo"]
         }
     }
 
@@ -59,9 +61,10 @@ fn test_register_runtime_parser() {
         .unwrap()
         .unwrap();
     let deps = p.parse_file("/some/file.foo", "").unwrap();
-    assert!(deps
-        .iter()
-        .any(|d| d.request.contains("toydep") || d.issuer == "toy"));
+    assert!(
+        deps.iter()
+            .any(|d| d.request.contains("toydep") || d.issuer == "toy")
+    );
 }
 
 #[tokio::test]
@@ -83,8 +86,8 @@ async fn test_runtime_parser_used_by_tree_builder() -> anyhow::Result<()> {
                 id: None,
             }])
         }
-        fn handled_extensions(&self) -> Vec<String> {
-            vec!["foo".to_string()]
+        fn handled_extensions(&self) -> &'static [&'static str] {
+            &["foo"]
         }
     }
 
@@ -114,9 +117,10 @@ async fn test_runtime_parser_used_by_tree_builder() -> anyhow::Result<()> {
     let deps_opt = entry_opt.unwrap();
     assert!(deps_opt.is_some(), "expected dependencies for x.foo");
     let deps = deps_opt.as_ref().unwrap();
-    assert!(deps
-        .iter()
-        .any(|d| d.request.contains("toydep") || d.issuer == "toy"));
+    assert!(
+        deps.iter()
+            .any(|d| d.request.contains("toydep") || d.issuer == "toy")
+    );
 
     Ok(())
 }
@@ -139,8 +143,8 @@ fn test_register_parser_uses_handled_extensions_and_lookup() {
                 id: None,
             }])
         }
-        fn handled_extensions(&self) -> Vec<String> {
-            vec!["bar".to_string()]
+        fn handled_extensions(&self) -> &'static [&'static str] {
+            &["bar"]
         }
     }
 
@@ -153,7 +157,8 @@ fn test_register_parser_uses_handled_extensions_and_lookup() {
 
     let p = p_opt.unwrap();
     let deps = p.parse_file("/some/file.bar", "").unwrap();
-    assert!(deps
-        .iter()
-        .any(|d| d.request.contains("toydep2") || d.issuer == "toy2"));
+    assert!(
+        deps.iter()
+            .any(|d| d.request.contains("toydep2") || d.issuer == "toy2")
+    );
 }

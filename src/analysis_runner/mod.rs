@@ -20,6 +20,11 @@ use crate::utils::{config, exit_codes};
 pub struct AnalysisRunner;
 
 impl AnalysisRunner {
+    /// Runs the analysis workflow once.
+    ///
+    /// # Side Effects
+    ///
+    /// If circular dependencies are found and the `--throw` flag is set, this function will terminate the process with a non-zero exit code (`std::process::exit(1)`).
     pub async fn run_analysis_once(cli: &Cli) -> Result<()> {
         let show_progress = if cli.progress {
             true
@@ -37,13 +42,16 @@ impl AnalysisRunner {
 
         let mut options = config::create_parse_options_from_cli(cli)?;
 
+        use std::sync::Arc;
+
         let progress_bar = if show_progress {
-            let pb = ProgressBar::new(expanded_files.len() as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("  [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-                    .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏  "),
+            let pb = Arc::new(
+                ProgressBar::new(expanded_files.len() as u64).with_style(
+                    ProgressStyle::default_bar()
+                        .template("  [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
+                        .unwrap()
+                        .progress_chars("█▉▊▋▌▍▎▏  "),
+                ),
             );
             logger::info("Progress bar enabled");
             Some(pb)
@@ -52,7 +60,7 @@ impl AnalysisRunner {
         };
 
         if let Some(ref pb) = progress_bar {
-            let pb_clone = pb.clone();
+            let pb_clone = Arc::clone(pb);
             options.progress_callback = Some(Box::new(move |ev, msg| {
                 // Always update message. Only increment on End so Start/End don't double-count.
                 pb_clone.set_message(msg.to_string());
@@ -148,14 +156,13 @@ impl AnalysisRunner {
         println!();
 
         let show_tree = cli.tree;
-        let show_circular = cli.circular || (!cli.circular && !cli.tree);
+        let show_circular = !cli.tree || cli.circular;
 
         if show_tree {
             console_output.print_tree(&result.tree, &result.entries);
         }
 
         if show_circular {
-            let console_output = ConsoleOutput::new();
             console_output.print_circular(&result.circulars, cli.take, None, None::<String>);
         }
 

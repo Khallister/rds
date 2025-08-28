@@ -12,6 +12,11 @@ impl CircularAnalyzer {
     /// Find circular dependencies using a single DFS per node with coloring
     /// to avoid revisiting nodes. This runs in O(N + E) time and avoids
     /// cloning the tree repeatedly.
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of cycles, where each cycle is represented as a vector of module IDs (`Vec<String>`).
+    /// Each inner vector contains the sequence of module IDs that form a circular dependency.
     pub fn find_circular_dependencies(
         &self,
         tree: &DependencyTree,
@@ -30,6 +35,7 @@ impl CircularAnalyzer {
         // color: 0 = unvisited, 1 = visiting (on stack), 2 = done
         let mut color: HashMap<String, u8> = HashMap::new();
         let mut stack: Vec<String> = Vec::new();
+        let mut stack_indices: HashMap<String, usize> = HashMap::new();
 
         // helper to canonicalize and insert cycle if new
         fn canonicalize_and_insert(
@@ -41,37 +47,45 @@ impl CircularAnalyzer {
                 return;
             }
 
-            let rotations = |v: &Vec<String>| {
-                let len = v.len();
-                let mut best = None::<(String, Vec<String>)>;
-                for i in 0..len {
-                    let mut r = v.clone();
-                    r.rotate_left(i);
-                    let key = r.join("->");
-                    match &best {
-                        Some((k, _)) if k <= &key => {}
-                        _ => best = Some((key, r)),
-                    }
+            let forward = rotations(&cyc[..]);
+            let mut backward_vec = cyc.clone();
+            backward_vec.reverse();
+            let backward = rotations(&backward_vec[..]);
+
+            if let (Some(forward), Some(backward)) = (forward, backward) {
+                let forward_key = forward.join("->");
+                let backward_key = backward.join("->");
+                let canonical = if forward_key <= backward_key {
+                    forward
+                } else {
+                    backward
+                };
+
+                let key = canonical.join("->");
+                if !seen_cycles.contains(&key) {
+                    seen_cycles.insert(key);
+                    circulars.push(canonical);
                 }
-                best.map(|(_, v)| v).unwrap()
-            };
-
-            let forward = rotations(&cyc);
-            let mut backward = cyc.clone();
-            backward.reverse();
-            backward = rotations(&backward);
-
-            let canonical = if forward.join("->") <= backward.join("->") {
-                forward
-            } else {
-                backward
-            };
-
-            let key = canonical.join("->");
-            if !seen_cycles.contains(&key) {
-                seen_cycles.insert(key);
-                circulars.push(canonical);
             }
+        }
+
+        // Extracted helper function for rotations
+        fn rotations(v: &[String]) -> Option<Vec<String>> {
+            let len = v.len();
+            if len == 0 {
+                return None;
+            }
+            let mut best = None::<(String, Vec<String>)>;
+            for i in 0..len {
+                let mut r = v.to_vec();
+                r.rotate_left(i);
+                let key = r.join("->");
+                match &best {
+                    Some((k, _)) if k > &key => {}
+                    _ => best = Some((key, r)),
+                }
+            }
+            best.map(|(_, v)| v)
         }
 
         // recursive DFS function (using & to avoid captures)
@@ -82,6 +96,7 @@ impl CircularAnalyzer {
             max_count: Option<usize>,
             color: &mut HashMap<String, u8>,
             stack: &mut Vec<String>,
+            stack_indices: &mut HashMap<String, usize>,
             circulars: &mut Vec<Vec<String>>,
             seen_cycles: &mut HashSet<String>,
         ) {
@@ -92,6 +107,7 @@ impl CircularAnalyzer {
             }
 
             color.insert(node.to_string(), 1);
+            stack_indices.insert(node.to_string(), stack.len());
             stack.push(node.to_string());
 
             if let Some(Some(deps)) = tree.get(node) {
@@ -112,9 +128,15 @@ impl CircularAnalyzer {
                         let state = color.get(dep_id).copied().unwrap_or(0);
                         if state == 1 {
                             // back-edge -> found a cycle
-                            if let Some(pos) = stack.iter().position(|x| x == dep_id) {
-                                let cyc = stack[pos..].to_vec();
-                                canonicalize_and_insert(cyc, seen_cycles, circulars);
+                            if let Some(&pos) = stack_indices.get(dep_id) {
+                                let cyc: Vec<&str> =
+                                    stack[pos..].iter().map(|s| s.as_str()).collect();
+                                // Only clone when passing to canonicalize_and_insert
+                                canonicalize_and_insert(
+                                    cyc.iter().map(|s| s.to_string()).collect(),
+                                    seen_cycles,
+                                    circulars,
+                                );
                             }
                         } else if state == 0 {
                             dfs(
@@ -124,6 +146,7 @@ impl CircularAnalyzer {
                                 max_count,
                                 color,
                                 stack,
+                                stack_indices,
                                 circulars,
                                 seen_cycles,
                             );
@@ -133,6 +156,7 @@ impl CircularAnalyzer {
             }
 
             stack.pop();
+            stack_indices.remove(node);
             color.insert(node.to_string(), 2);
         }
 
@@ -151,6 +175,7 @@ impl CircularAnalyzer {
                     max_count,
                     &mut color,
                     &mut stack,
+                    &mut stack_indices,
                     &mut circulars,
                     &mut seen_cycles,
                 );
@@ -159,9 +184,9 @@ impl CircularAnalyzer {
 
         let elapsed = t0.elapsed();
         crate::logger::info(&format!(
-            "find_circular_dependencies: completed (found={} circulars) elapsed={:?}",
+            "find_circular_dependencies: completed (found={} circulars) elapsed={}ms",
             circulars.len(),
-            elapsed
+            elapsed.as_millis()
         ));
 
         circulars

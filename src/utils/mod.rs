@@ -107,6 +107,7 @@ pub mod config {
         if !cli.extensions.trim().is_empty() {
             options.extensions = cli.extensions.split(',').map(|s| s.to_string()).collect();
         }
+
         options.include = regex::Regex::new(&cli.include)?;
         options.exclude = regex::Regex::new(&cli.exclude)?;
         options.dependency_exclude = regex::Regex::new(r"node_modules|\\.git|\\.svn|\\.hg")?;
@@ -119,6 +120,7 @@ pub mod config {
         };
         options.cache_enabled = cli.effective_cache_setting();
         options.resolve_concurrency = cli.resolve_concurrency;
+        options.max_depth = cli.max_depth;
 
         Ok(options)
     }

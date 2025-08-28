@@ -133,7 +133,7 @@ impl WatchRunner {
         }
 
         let debounce_ms = cli.debounce.unwrap_or(300u64);
-        let DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(debounce_ms);
+        let debounce_duration: std::time::Duration = std::time::Duration::from_millis(debounce_ms);
 
         let mut first_incremental_run = false;
 
@@ -158,9 +158,9 @@ impl WatchRunner {
                     }
                 }
 
-                _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                _ = tokio::time::sleep(debounce_duration) => {
                     logger::debug("Debounce tick");
-                    if !changed_files.is_empty() && last_change.elapsed() >= DEBOUNCE_DURATION {
+                    if !changed_files.is_empty() && last_change.elapsed() >= debounce_duration {
                         let files_to_analyze: Vec<String> = changed_files.drain().collect();
                         logged_files.clear();
 

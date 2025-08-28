@@ -108,6 +108,12 @@ pub struct Cli {
         help = "Debounce interval in milliseconds when used with --watch"
     )]
     pub debounce: Option<u64>,
+    #[arg(
+        long,
+        default_value_t = 128usize,
+        help = "Maximum directory recursion depth when expanding directories and globs"
+    )]
+    pub max_depth: usize,
 }
 
 impl Cli {

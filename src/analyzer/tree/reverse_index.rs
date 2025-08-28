@@ -1,19 +1,29 @@
+#[cfg(test)]
 use crate::types::Dependency;
 use crate::types::DependencyTree;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-/// ReverseIndex maintains a map from a resolved id -> set of issuer file keys
-/// that import that id. It encapsulates insertion/removal/pruning logic so the
+/// ReverseIndex maintains a map from a resolved id to a set of issuer file keys
+/// that import that id, encapsulating insertion, removal, and pruning logic so the
 /// tree builder doesn't have to manage the raw HashMap directly.
+///
+/// Additionally, it maintains a `base_name_map`, which maps file base names to all
+/// keys (full resolved ids) with that base name. This is used for fast lookup of
+/// dependencies when only the file name is known or when matching by suffix is required,
+/// such as during affected set computation or when handling ambiguous or partial paths.
 #[derive(Debug, Default, Clone)]
 pub struct ReverseIndex {
     idx: HashMap<String, HashSet<String>>,
+    /// Maps file base names to all keys with that base name for fast lookup,
+    /// enabling efficient reverse lookups and suffix-based matching.
+    base_name_map: HashMap<String, HashSet<String>>,
 }
 
 impl ReverseIndex {
     pub fn new() -> Self {
         Self {
             idx: HashMap::new(),
+            base_name_map: HashMap::new(),
         }
     }
 
@@ -27,6 +37,16 @@ impl ReverseIndex {
                             .entry(id.clone())
                             .or_insert_with(HashSet::new)
                             .insert(k.clone());
+                        // Update base_name_map
+                        if let Some(base) = std::path::Path::new(id)
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                        {
+                            ri.base_name_map
+                                .entry(base.to_string())
+                                .or_insert_with(HashSet::new)
+                                .insert(id.clone());
+                        }
                     }
                 }
             }
@@ -36,6 +56,8 @@ impl ReverseIndex {
 
     /// Update mappings for a single issuer key by removing entries derived
     /// from `prev_deps_opt` and inserting those from `new_deps_opt`.
+    // This method is only used in tests and is not part of the public API in production.
+    #[cfg(test)]
     pub fn update_mappings_for_issuer(
         &mut self,
         issuer: &str,
@@ -47,9 +69,6 @@ impl ReverseIndex {
                 if let Some(ref id) = dep.id {
                     if let Some(set) = self.idx.get_mut(id) {
                         set.remove(issuer);
-                        if set.is_empty() {
-                            // Mark for removal by dropping the empty set
-                        }
                     }
                 }
             }
@@ -114,11 +133,15 @@ impl ReverseIndex {
     }
 
     /// Return a mutable reference to the parent set for an id, if present.
+    /// This method is only used in tests and is not part of the public API in production.
+    #[cfg(test)]
     pub fn get_mut_parents(&mut self, id: &str) -> Option<&mut HashSet<String>> {
         self.idx.get_mut(id)
     }
 
     /// Remove an id entry entirely from the index.
+    /// This method is only used in tests and is not part of the public API in production.
+    #[cfg(test)]
     pub fn remove_id(&mut self, id: &str) {
         self.idx.remove(id);
     }
@@ -131,6 +154,8 @@ impl ReverseIndex {
         partial: &DependencyTree,
         last_full_tree: &mut DependencyTree,
     ) {
+        let rds_watch_debug = std::env::var("RDS_WATCH_DEBUG").is_ok();
+
         for (k, v) in partial.iter() {
             // remove previous mappings for this issuer
             if let Some(prev_opt) = last_full_tree.get(k) {
@@ -139,7 +164,7 @@ impl ReverseIndex {
                         if let Some(ref id) = dep.id {
                             if let Some(set) = self.idx.get_mut(id) {
                                 let removed = set.remove(k);
-                                if std::env::var("RDS_WATCH_DEBUG").is_ok() && removed {
+                                if rds_watch_debug && removed {
                                     crate::logger::info(&format!(
                                         "[ReverseIndex] removed mapping: id={} issuer={}",
                                         id, k
@@ -153,7 +178,6 @@ impl ReverseIndex {
                     }
                 }
             }
-
             // replace entry in last_full_tree
             last_full_tree.insert(k.clone(), v.clone());
 
@@ -166,7 +190,7 @@ impl ReverseIndex {
                             .entry(id.clone())
                             .or_insert_with(HashSet::new)
                             .insert(k.clone());
-                        if std::env::var("RDS_WATCH_DEBUG").is_ok() && inserted {
+                        if rds_watch_debug && inserted {
                             crate::logger::info(&format!(
                                 "[ReverseIndex] inserted mapping: id={} issuer={}",
                                 id, k
@@ -193,62 +217,73 @@ impl ReverseIndex {
             self.idx.remove(&id);
         }
     }
-
-    /// Compute affected set using the internal reverse index only. Returns an
-    /// empty set if the index is empty.
+    /// Computes the set of affected files given a list of changed files.
+    ///
+    /// This function is async because it performs asynchronous path normalization
+    /// for each changed file before traversing the reverse index.
     pub async fn compute_affected_set(&self, changed_files: &[String]) -> HashSet<String> {
         if self.idx.is_empty() {
             return HashSet::new();
         }
 
-        let mut queue: Vec<String> = Vec::new();
-        let mut affected: HashSet<String> = HashSet::new();
+        let rds_watch_debug = std::env::var("RDS_WATCH_DEBUG").is_ok();
 
-        for f in changed_files {
-            if let Some(nf) = crate::utils::path::normalize_path_for_storage_cached(f)
-                .await
-                .ok()
-            {
-                // Always include the changed file itself in the affected set so
-                // callers see the direct change even when no parents exist.
-                queue.push(nf.clone());
+        let mut queue: VecDeque<String> = VecDeque::new();
+        let affected = HashSet::new();
 
-                // Direct match (absolute or already-shortened)
+        // Batch normalization of changed_files
+        let futures = changed_files
+            .iter()
+            .map(|f| crate::utils::path::normalize_path_for_storage_cached(f));
+        let normalized_results = futures::future::join_all(futures).await;
+
+        let mut seen: HashSet<String> = HashSet::new();
+
+        for (_, result) in normalized_results.into_iter().enumerate() {
+            if let Ok(nf) = result {
+                if seen.insert(nf.clone()) {
+                    queue.push_back(nf.clone());
+                }
+
                 if self.idx.contains_key(&nf) {
                     continue;
                 }
 
-                // Base filename (e.g., "file.js") may match keys in shortened trees
                 if let Some(base) = std::path::Path::new(&nf)
                     .file_name()
                     .and_then(|s| s.to_str())
                 {
-                    if self.idx.contains_key(base) {
-                        queue.push(base.to_string());
+                    // Use base_name_map for fast lookup
+                    if let Some(keys) = self.base_name_map.get(base) {
+                        for key in keys {
+                            if seen.insert(key.clone()) {
+                                queue.push_back(key.clone());
+                            }
+                        }
                         continue;
                     }
 
-                    // Fallback: try suffix-match against stored keys so absolute
-                    // normalized paths can match shortened keys like "src/foo.js".
+                    // Fallback to suffix matching if not found in base_name_map
                     for key in self.idx.keys() {
                         if key.ends_with(&nf) || nf.ends_with(key) || key.ends_with(base) {
-                            queue.push(key.clone());
+                            if seen.insert(key.clone()) {
+                                queue.push_back(key.clone());
+                            }
                         }
                     }
                 } else {
-                    // If no base, still attempt suffix matches
                     for key in self.idx.keys() {
                         if key.ends_with(&nf) || nf.ends_with(key) {
-                            queue.push(key.clone());
+                            if seen.insert(key.clone()) {
+                                queue.push_back(key.clone());
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Optional debug output to help trace why certain changed files map (or
-        // don't map) to index keys during watch-mode incremental runs.
-        if std::env::var("RDS_WATCH_DEBUG").is_ok() {
+        if rds_watch_debug {
             crate::logger::info(&format!(
                 "[ReverseIndex::compute_affected_set] changed_files={:?}, initial_queue={:?}, index_keys_count={} ",
                 changed_files,
@@ -257,7 +292,16 @@ impl ReverseIndex {
             ));
         }
 
-        while let Some(curr) = queue.pop() {
+        self.bfs_traverse(queue, affected)
+    }
+
+    /// Helper for BFS traversal used in compute_affected_set and potentially elsewhere.
+    fn bfs_traverse(
+        &self,
+        mut queue: VecDeque<String>,
+        mut affected: HashSet<String>,
+    ) -> HashSet<String> {
+        while let Some(curr) = queue.pop_front() {
             if affected.contains(&curr) {
                 continue;
             }
@@ -266,12 +310,11 @@ impl ReverseIndex {
             if let Some(parents) = self.idx.get(&curr) {
                 for p in parents.iter() {
                     if !affected.contains(p) {
-                        queue.push(p.clone());
+                        queue.push_back(p.clone());
                     }
                 }
             }
         }
-
         affected
     }
 }

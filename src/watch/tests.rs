@@ -35,6 +35,7 @@ async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<(
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        max_depth: 128,
     };
 
     // changed_files empty should exercise analyze_files_incremental empty path
@@ -73,6 +74,7 @@ async fn test_run_incremental_analysis_print_tree_only() -> anyhow::Result<()> {
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        max_depth: 128,
     };
 
     WatchRunner::run_incremental_analysis(analyzer, Vec::new(), Vec::new(), &cli).await?;

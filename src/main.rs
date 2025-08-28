@@ -19,7 +19,7 @@ use anyhow::Result;
 
 use crate::analysis_runner::AnalysisRunner;
 use crate::cli::Cli;
-use crate::parser::{register_parser, JavaScriptParser, VueParser};
+use crate::parser::{JavaScriptParser, VueParser, register_parser};
 use crate::utils::threading;
 use crate::watch::WatchRunner;
 use std::sync::Arc;
@@ -39,7 +39,9 @@ async fn main() -> Result<()> {
 
     if cli.watch {
         if cli.throw {
-            eprintln!("Warning: --throw is ignored when used with --watch. Continuing in watch mode without exiting on circulars.");
+            eprintln!(
+                "Warning: --throw is ignored when used with --watch. Continuing in watch mode without exiting on circulars."
+            );
             cli.throw = false;
         }
         logger::init(cli.log);

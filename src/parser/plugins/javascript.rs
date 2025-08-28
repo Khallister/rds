@@ -22,15 +22,8 @@ impl JavaScriptParser {
         })
     }
 
-    pub fn handled_extensions(&self) -> Vec<String> {
-        vec![
-            "js".to_string(),
-            "mjs".to_string(),
-            "cjs".to_string(),
-            "jsx".to_string(),
-            "ts".to_string(),
-            "tsx".to_string(),
-        ]
+    pub fn handled_extensions(&self) -> &'static [&'static str] {
+        &["js", "mjs", "cjs", "jsx", "ts", "tsx"]
     }
 
     pub fn parse_file<P: AsRef<Path>>(

@@ -25,6 +25,13 @@ impl DependencyAnalyzer {
         })
     }
 
+    /// Analyzes the provided files, building a dependency tree and detecting circular dependencies.
+    ///
+    /// # Parameters
+    /// - `entries`: A slice of file paths (as `String`) to analyze.
+    ///
+    /// # Returns
+    /// Returns a `Result` containing a tuple with the `AnalysisResult` and the number of threads used.
     pub async fn analyze_files(&mut self, entries: &[String]) -> Result<(AnalysisResult, usize)> {
         let (tree, num_threads) = self
             .tree_builder
@@ -37,10 +44,8 @@ impl DependencyAnalyzer {
             self.options.take,
         );
 
-        let resolved_entries = entries.to_vec();
-
         let result = AnalysisResult {
-            entries: resolved_entries,
+            entries: entries.to_vec(),
             tree,
             circulars,
         };
@@ -63,10 +68,8 @@ impl DependencyAnalyzer {
             self.options.take,
         );
 
-        let resolved_entries = changed_files.to_vec();
-
         let result = AnalysisResult {
-            entries: resolved_entries,
+            entries: changed_files.to_vec(),
             tree,
             circulars,
         };
@@ -74,10 +77,13 @@ impl DependencyAnalyzer {
         Ok((result, num_threads))
     }
 
+    /// Returns statistics about the current state of the dependency tree cache.
     pub fn get_cache_stats(&self) -> CacheStats {
         self.tree_builder.get_cache_stats()
     }
 
+    /// Returns statistics about the incremental cache, which tracks changes between analysis runs.
+    /// Unlike `get_cache_stats`, this focuses on cache data relevant to incremental analysis.
     pub fn get_incremental_cache_stats(&mut self) -> CacheStats {
         self.tree_builder.get_incremental_cache_stats()
     }
@@ -85,14 +91,18 @@ impl DependencyAnalyzer {
     /// Invalidate caches related to the provided paths. Async because
     /// resolver operations are async.
     pub async fn invalidate_caches(&mut self, paths: &[String]) {
-        self.tree_builder.invalidate_caches(paths).await;
+        let _ = self.tree_builder.invalidate_caches(paths).await;
     }
 
-    /// Clear all analyzer-related caches.
+    /// Clears all caches maintained by the analyzer, removing any stored dependency or incremental analysis data.
     pub async fn clear_all_caches(&mut self) {
         self.tree_builder.clear_all_caches().await;
     }
 
+    /// Returns a reference to the `ParseOptions` used by this analyzer.
+    ///
+    /// This method is only available in test builds and is intended for use in test code.
+    #[cfg(test)]
     pub fn options(&self) -> &ParseOptions {
         &self.options
     }
