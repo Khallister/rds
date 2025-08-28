@@ -356,7 +356,28 @@ impl TreeBuilder {
                     }
 
                     if !affected_fallback.is_empty() {
-                        let affected_vec: Vec<String> = affected_fallback.into_iter().collect();
+                        // Map any basename-only entries in affected_fallback to the
+                        // full paths that exist in last_tree. This avoids passing
+                        // bare filenames (e.g. "Header.vue") into the full
+                        // build which would cause reads relative to cwd.
+                        let mut mapped: std::collections::HashSet<String> =
+                            std::collections::HashSet::new();
+                        for (file, _deps_opt) in last_tree.iter() {
+                            if affected_fallback.contains(file) {
+                                mapped.insert(file.clone());
+                                continue;
+                            }
+                            if let Some(base) = std::path::Path::new(file)
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                            {
+                                if affected_fallback.contains(base) {
+                                    mapped.insert(file.clone());
+                                }
+                            }
+                        }
+
+                        let affected_vec: Vec<String> = mapped.into_iter().collect();
                         let (mut tree, threads) =
                             self.build_dependency_tree(&affected_vec, options).await?;
                         resolve::resolve_dependencies(&self.resolver, &mut tree, options).await?;

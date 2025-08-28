@@ -31,6 +31,7 @@ async fn test_run_incremental_analysis_print_circular_only() -> anyhow::Result<(
         watch: false,
         cache: false,
         no_cache: false,
+        debounce: None,
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
@@ -68,6 +69,7 @@ async fn test_run_incremental_analysis_print_tree_only() -> anyhow::Result<()> {
         watch: false,
         cache: false,
         no_cache: false,
+        debounce: None,
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
@@ -89,5 +91,5 @@ fn test_count_total_dependencies() {
 #[test]
 fn test_print_circular_dependencies_compact() {
     let out = ConsoleOutput::new();
-    out.print_circular(&[], None, Some(3));
+    out.print_circular(&[], None, Some(3), None::<String>);
 }

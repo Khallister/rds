@@ -131,6 +131,7 @@ impl ConsoleOutput {
         circulars: &[Vec<String>],
         take_limit: Option<usize>,
         max_entries: Option<usize>,
+        context: Option<String>,
     ) {
         let header = if circulars.is_empty() {
             style("🔄 Circular Dependencies").bold().green()
@@ -141,11 +142,14 @@ impl ConsoleOutput {
         println!("{}", header);
 
         if circulars.is_empty() {
-            println!(
-                "  {} {}",
-                style("✅").green(),
-                style("Congratulations, no circular dependency was found in your project.").green()
-            );
+            let default_msg = "Congratulations, no circular dependency was found in your project.";
+            let ctx_msg = if let Some(ctx) = context.as_ref() {
+                format!("No circular dependencies found for changed files: {}", ctx)
+            } else {
+                default_msg.to_string()
+            };
+
+            println!("  {} {}", style("✅").green(), style(ctx_msg).green());
         } else {
             let digits = circulars.len().to_string().len();
             let to_show = max_entries.unwrap_or(circulars.len());

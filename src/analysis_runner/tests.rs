@@ -18,7 +18,7 @@ fn test_count_total_dependencies() {
 fn test_print_circular_dependencies_empty() {
     let out = ConsoleOutput::new();
     let res = std::panic::catch_unwind(|| {
-        out.print_circular(&[], None, None);
+        out.print_circular(&[], None, None, None::<String>);
     });
     assert!(res.is_ok());
 }
@@ -71,6 +71,7 @@ async fn test_display_analysis_results_writes_json_and_prints() -> anyhow::Resul
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     // call the private display function directly
@@ -112,6 +113,7 @@ async fn test_run_analysis_once_with_empty_inputs_returns_ok() -> anyhow::Result
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     let res = AnalysisRunner::run_analysis_once(&cli).await?;
@@ -152,6 +154,7 @@ async fn test_run_analysis_once_with_exit_code_and_no_circulars() -> anyhow::Res
         threads: Some(1),
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     // should not exit even though exit_code is specified because there are no circulars
@@ -195,6 +198,7 @@ async fn test_run_analysis_once_with_progress_none_and_ci_set() -> anyhow::Resul
         threads: Some(1),
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     let res = AnalysisRunner::run_analysis_once(&cli).await?;
@@ -241,6 +245,7 @@ async fn test_display_analysis_results_with_circulars() -> anyhow::Result<()> {
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     AnalysisRunner::display_analysis_results(
@@ -289,6 +294,7 @@ async fn test_run_analysis_once_with_real_file_and_progress() -> anyhow::Result<
         threads: Some(1),
         resolve_concurrency: None,
         pre_scan: false,
+        debounce: None,
     };
 
     // should complete without error

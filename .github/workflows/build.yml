@@ -314,6 +314,34 @@ jobs:
             fi
           done < ../artifact-list.txt
 
+      - name: Setup Node.js for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish package to npm (if present and not private)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Skip if no package.json at repo root
+          if [ ! -f package.json ]; then
+            echo "No package.json at repo root; skipping npm publish"
+            exit 0
+          fi
+          # Respect private packages
+          is_private=$(node -e "try{console.log(Boolean(require('./package.json').private))}catch(e){console.log(false)}")
+          if [ "$is_private" = "true" ]; then
+            echo "package.json has private=true; skipping npm publish"
+            exit 0
+          fi
+          # Publish the npm package as-is. The package's install script fetches
+          # the native binaries from the GitHub release artifacts already
+          # created by this workflow, so rebuilding native artifacts here is
+          # unnecessary and would duplicate work.
+          npm publish --access public
+
       - name: Cleanup sensitive files
         run: |
           rm -f private.gpg || true

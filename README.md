@@ -33,6 +33,7 @@ A compact, developer-focused dependency analyzer for JavaScript, TypeScript, and
 - `--take <N>` — stop after finding N circulars
 - `--throw` — exit with code 1 if circulars found
 - `--watch` / `-W` — watch files and re-run analysis
+- `--debounce <ms>` — when used with `--watch`, wait this number of milliseconds after the last file change before triggering analysis (default: 300)
 - `--cache` / `--no-cache` — control file caching (default: enabled for `--watch`)
 - `--log` — enable verbose logging
 - `-o, --output <FILE>` — write results to JSON

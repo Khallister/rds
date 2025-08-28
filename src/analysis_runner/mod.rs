@@ -156,7 +156,7 @@ impl AnalysisRunner {
 
         if show_circular {
             let console_output = ConsoleOutput::new();
-            console_output.print_circular(&result.circulars, cli.take, None);
+            console_output.print_circular(&result.circulars, cli.take, None, None::<String>);
         }
 
         if let Some(ref output_path) = cli.output {

@@ -52,6 +52,7 @@
     "bin/run-rds.js",
     "install.js",
     "index.js",
+    "plugin/",
     "README.md",
     "LICENSE"
   ],
