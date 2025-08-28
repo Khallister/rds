@@ -85,19 +85,12 @@ impl TreeBuilder {
                 files_to_process.len(),
                 processed_files.len()
             ));
-
             let current_batch: Vec<String> = files_to_process.drain(..).collect();
             let mut new_dependencies = Vec::new();
 
-            let mut unprocessed_batch: Vec<String> = Vec::new();
-            for file_path in current_batch.into_iter() {
-                let normalized =
-                    crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
-                if !processed_files.contains(&normalized) {
-                    processed_files.insert(normalized);
-                    unprocessed_batch.push(file_path);
-                }
-            }
+            // Normalize and filter out already processed files
+            let unprocessed_batch =
+                Self::normalize_and_filter_batch(current_batch, &mut processed_files).await?;
 
             if unprocessed_batch.is_empty() {
                 continue;
@@ -106,37 +99,15 @@ impl TreeBuilder {
             let (cached_results, files_to_parse) =
                 partition::partition_cached(&mut self.cache, unprocessed_batch, options).await?;
 
-            for (file_path, deps_opt) in cached_results {
-                let normalized_path =
-                    crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
-                tree.insert(normalized_path, deps_opt.clone());
-
-                if let Some(dependencies) = deps_opt {
-                    let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
-                    for dep in dependencies {
-                        if let Some(id) = dep.id {
-                            // id is already a normalized storage path (set when cached)
-                            if !processed_files.contains(&id) && !new_dependencies.contains(&id) {
-                                new_dependencies.push(id);
-                            }
-                        } else if let Ok(Some(resolved_path)) = self
-                            .resolver
-                            .resolve_module(context, &dep.request, &options.extensions)
-                            .await
-                        {
-                            let normalized = crate::utils::path::normalize_path_for_storage_cached(
-                                &resolved_path,
-                            )
-                            .await?;
-                            if !processed_files.contains(&normalized)
-                                && !new_dependencies.contains(&normalized)
-                            {
-                                new_dependencies.push(normalized);
-                            }
-                        }
-                    }
-                }
-            }
+            // Handle cached results: insert into tree and collect discovered deps
+            self.handle_cached_results(
+                cached_results,
+                &mut tree,
+                &mut processed_files,
+                &mut new_dependencies,
+                options,
+            )
+            .await?;
 
             if files_to_parse.is_empty() {
                 files_to_process = new_dependencies;
@@ -158,19 +129,14 @@ impl TreeBuilder {
                 max_concurrent
             ));
 
-            let parsed_results =
-                parse::parse_files_batch(files_to_parse, options, max_concurrent).await;
-
-            logger::debug("Batch parse completed");
-
-            parse::process_parsed_results(
-                &mut self.cache,
-                &self.resolver,
-                parsed_results,
+            // Parse and process the batch (delegated to parser helpers)
+            self.parse_and_process_batch(
+                files_to_parse,
+                options,
+                max_concurrent,
                 &mut tree,
                 &mut processed_files,
                 &mut new_dependencies,
-                options,
             )
             .await?;
 
@@ -356,7 +322,28 @@ impl TreeBuilder {
                     }
 
                     if !affected_fallback.is_empty() {
-                        let affected_vec: Vec<String> = affected_fallback.into_iter().collect();
+                        // Map any basename-only entries in affected_fallback to the
+                        // full paths that exist in last_tree. This avoids passing
+                        // bare filenames (e.g. "Header.vue") into the full
+                        // build which would cause reads relative to cwd.
+                        let mut mapped: std::collections::HashSet<String> =
+                            std::collections::HashSet::new();
+                        for (file, _deps_opt) in last_tree.iter() {
+                            if affected_fallback.contains(file) {
+                                mapped.insert(file.clone());
+                                continue;
+                            }
+                            if let Some(base) = std::path::Path::new(file)
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                            {
+                                if affected_fallback.contains(base) {
+                                    mapped.insert(file.clone());
+                                }
+                            }
+                        }
+
+                        let affected_vec: Vec<String> = mapped.into_iter().collect();
                         let (mut tree, threads) =
                             self.build_dependency_tree(&affected_vec, options).await?;
                         resolve::resolve_dependencies(&self.resolver, &mut tree, options).await?;
@@ -448,4 +435,89 @@ impl TreeBuilder {
     // compute_affected_set moved into ReverseIndex
 
     // reverse-index pruning is handled by ReverseIndex::prune
+}
+
+impl TreeBuilder {
+    async fn normalize_and_filter_batch(
+        batch: Vec<String>,
+        processed_files: &mut HashSet<String>,
+    ) -> Result<Vec<String>> {
+        let mut unprocessed: Vec<String> = Vec::new();
+        for file_path in batch.into_iter() {
+            let normalized =
+                crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
+            if !processed_files.contains(&normalized) {
+                processed_files.insert(normalized);
+                unprocessed.push(file_path);
+            }
+        }
+        Ok(unprocessed)
+    }
+
+    async fn handle_cached_results(
+        &mut self,
+        cached_results: Vec<(String, Option<Vec<crate::types::Dependency>>)>,
+        tree: &mut DependencyTree,
+        processed_files: &mut HashSet<String>,
+        new_dependencies: &mut Vec<String>,
+        options: &ParseOptions,
+    ) -> Result<()> {
+        for (file_path, deps_opt) in cached_results {
+            let normalized_path =
+                crate::utils::path::normalize_path_for_storage_cached(&file_path).await?;
+            tree.insert(normalized_path, deps_opt.clone());
+
+            if let Some(dependencies) = deps_opt {
+                let context = Path::new(&file_path).parent().unwrap_or(Path::new("."));
+                for dep in dependencies {
+                    if let Some(id) = dep.id {
+                        if !processed_files.contains(&id) && !new_dependencies.contains(&id) {
+                            new_dependencies.push(id);
+                        }
+                    } else if let Ok(Some(resolved_path)) = self
+                        .resolver
+                        .resolve_module(context, &dep.request, &options.extensions)
+                        .await
+                    {
+                        let normalized =
+                            crate::utils::path::normalize_path_for_storage_cached(&resolved_path)
+                                .await?;
+                        if !processed_files.contains(&normalized)
+                            && !new_dependencies.contains(&normalized)
+                        {
+                            new_dependencies.push(normalized);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn parse_and_process_batch(
+        &mut self,
+        files_to_parse: Vec<String>,
+        options: &ParseOptions,
+        max_concurrent: usize,
+        tree: &mut DependencyTree,
+        processed_files: &mut HashSet<String>,
+        new_dependencies: &mut Vec<String>,
+    ) -> Result<()> {
+        let parsed_results =
+            parse::parse_files_batch(files_to_parse, options, max_concurrent).await;
+        logger::debug("Batch parse completed");
+
+        parse::process_parsed_results(
+            &mut self.cache,
+            &self.resolver,
+            parsed_results,
+            tree,
+            processed_files,
+            new_dependencies,
+            options,
+        )
+        .await?;
+
+        Ok(())
+    }
 }

@@ -27,8 +27,8 @@ impl VueParser {
         })
     }
 
-    pub fn handled_extensions(&self) -> Vec<String> {
-        vec!["vue".to_string()]
+    pub fn handled_extensions(&self) -> &'static [&'static str] {
+        &["vue"]
     }
 
     pub fn parse_file<P: AsRef<Path>>(
@@ -80,33 +80,39 @@ impl VueParser {
     }
 
     fn parse_sfc(&self, content: &str) -> Result<SfcDescriptor> {
-        let script = self
-            .script_regex
-            .captures(content)
-            .filter(|cap| {
-                let full_tag = &content[cap.get(0).unwrap().range()];
-                !full_tag.contains("setup")
+        let script = self.script_regex.captures(content).and_then(|cap| {
+            let full_tag = cap.get(0).and_then(|m| Some(&content[m.range()]));
+            if let Some(full_tag) = full_tag {
+                if !full_tag.contains("setup") {
+                    if let Some(m) = cap.get(1) {
+                        return Some(SfcBlock {
+                            content: m.as_str().to_string(),
+                        });
+                    }
+                }
+            }
+            None
+        });
+
+        let script_setup = self.script_setup_regex.captures(content).and_then(|cap| {
+            cap.get(1).map(|m| SfcBlock {
+                content: m.as_str().to_string(),
             })
-            .map(|cap| SfcBlock {
-                content: cap.get(1).unwrap().as_str().to_string(),
-            });
+        });
 
-        let script_setup = self
-            .script_setup_regex
-            .captures(content)
-            .map(|cap| SfcBlock {
-                content: cap.get(1).unwrap().as_str().to_string(),
-            });
-
-        let template = self.template_regex.captures(content).map(|cap| SfcBlock {
-            content: cap.get(1).unwrap().as_str().to_string(),
+        let template = self.template_regex.captures(content).and_then(|cap| {
+            cap.get(1).map(|m| SfcBlock {
+                content: m.as_str().to_string(),
+            })
         });
 
         let styles = self
             .style_regex
             .captures_iter(content)
-            .map(|cap| SfcBlock {
-                content: cap.get(1).unwrap().as_str().to_string(),
+            .filter_map(|cap| {
+                cap.get(1).map(|m| SfcBlock {
+                    content: m.as_str().to_string(),
+                })
             })
             .collect();
 
@@ -124,7 +130,7 @@ impl VueParser {
         for cap in self.component_regex.captures_iter(content) {
             if let Some(component_name) = cap.get(1) {
                 let name = component_name.as_str();
-                if name.chars().next().unwrap_or('a').is_uppercase() {
+                if !name.is_empty() && name.chars().next().unwrap_or('a').is_uppercase() {
                     dependencies.push(Dependency {
                         issuer: issuer.to_string(),
                         request: format!("@/components/{}.vue", name),

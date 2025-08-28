@@ -58,6 +58,10 @@ pub fn level() -> Option<Level> {
     }
 }
 
+/// Returns true if a message at the given level should be logged.
+///
+/// Note: Lower numeric values represent more verbose levels (e.g., Debug = 1, Info = 2).
+/// A message is logged if its level is as "important" (numerically >=) as the current level.
 fn should_log(at: Level) -> bool {
     if !ENABLED.load(Ordering::SeqCst) {
         return false;

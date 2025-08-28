@@ -1,6 +1,6 @@
 use super::*;
 use crate::types::{AnalysisResult, Dependency, DependencyKind};
-use serde_json::{from_value, to_value, Value};
+use serde_json::{Value, from_value, to_value};
 use std::collections::HashMap;
 use tempfile::NamedTempFile;
 
@@ -8,7 +8,7 @@ use tempfile::NamedTempFile;
 fn test_console_print_circular_empty() {
     let out = ConsoleOutput::new();
     // call function to ensure it doesn't panic and prints expected header
-    out.print_circular(&Vec::new(), None, None);
+    out.print_circular(&Vec::new(), None, None, None::<String>);
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn test_print_circular_with_entries_and_limit() {
         vec!["C".to_string(), "D".to_string()],
     ];
     // should print the circulars without panic
-    out.print_circular(&circulars, Some(1), Some(1));
+    out.print_circular(&circulars, Some(1), Some(1), None::<String>);
 }
 
 #[tokio::test]

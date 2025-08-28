@@ -49,9 +49,11 @@ fn test_create_parse_options_from_cli_basic() {
         watch: false,
         cache: false,
         no_cache: false,
+        debounce: None,
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        max_depth: 128,
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
@@ -138,9 +140,11 @@ fn test_create_parse_options_from_cli_skip_dynamic_variants() {
         watch: false,
         cache: false,
         no_cache: false,
+        debounce: None,
         threads: None,
         resolve_concurrency: None,
         pre_scan: false,
+        max_depth: 128,
     };
 
     let opts = config::create_parse_options_from_cli(&cli).unwrap();
@@ -190,51 +194,45 @@ cache_enabled = false
     fs::write(&cfg_path, cfg).unwrap();
 
     // set XDG_CONFIG_HOME to our temp dir so loader picks up the file without changing cwd
-    let prev_xdg = std::env::var("XDG_CONFIG_HOME").ok();
     let dir_str = dir.path().to_str().expect("temp dir path must be unicode");
-    std::env::set_var("XDG_CONFIG_HOME", dir_str);
+    temp_env::with_var("XDG_CONFIG_HOME", Some(dir_str), || {
+        let cli = Cli {
+            files: vec!["x".to_string()],
+            context: None,
+            extensions: "".to_string(), // CLI not setting extensions
+            filter: None,
+            include: ".*".to_string(),
+            exclude: "node_modules".to_string(),
+            output: None,
+            tree: false,
+            circular: false,
 
-    let cli = Cli {
-        files: vec!["x".to_string()],
-        context: None,
-        extensions: "".to_string(), // CLI not setting extensions
-        filter: None,
-        include: ".*".to_string(),
-        exclude: "node_modules".to_string(),
-        output: None,
-        tree: false,
-        circular: false,
+            log: false,
+            throw: false,
+            tsconfig: None,
+            exit_code: None,
+            progress: false,
+            skip_dynamic_imports: false,
+            take: None,
+            watch: false,
+            cache: false,
+            no_cache: false,
+            debounce: None,
+            threads: None,
+            resolve_concurrency: None,
+            pre_scan: false,
+            max_depth: 128,
+        };
 
-        log: false,
-        throw: false,
-        tsconfig: None,
-        exit_code: None,
-        progress: false,
-        skip_dynamic_imports: false,
-        take: None,
-        watch: false,
-        cache: false,
-        no_cache: false,
-        threads: None,
-        resolve_concurrency: None,
-        pre_scan: false,
-    };
+        let opts = config::create_parse_options_from_cli(&cli).unwrap();
+        // from file
+        assert!(opts.extensions.contains(&".abc".to_string()));
+        assert_eq!(opts.cache_enabled, false);
 
-    let opts = config::create_parse_options_from_cli(&cli).unwrap();
-    // from file
-    assert!(opts.extensions.contains(&".abc".to_string()));
-    assert_eq!(opts.cache_enabled, false);
-
-    // CLI should override cache_enabled via effective_cache_setting -> simulate CLI enabling cache
-    let mut cli2 = cli.clone();
-    cli2.cache = true;
-    let opts2 = config::create_parse_options_from_cli(&cli2).unwrap();
-    assert_eq!(opts2.cache_enabled, true);
-
-    // restore XDG_CONFIG_HOME
-    if let Some(v) = prev_xdg {
-        std::env::set_var("XDG_CONFIG_HOME", v);
-    } else {
-        std::env::remove_var("XDG_CONFIG_HOME");
-    }
+        // CLI should override cache_enabled via effective_cache_setting -> simulate CLI enabling cache
+        let mut cli2 = cli.clone();
+        cli2.cache = true;
+        let opts2 = config::create_parse_options_from_cli(&cli2).unwrap();
+        assert_eq!(opts2.cache_enabled, true);
+    });
 }

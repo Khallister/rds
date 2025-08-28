@@ -120,7 +120,8 @@ impl WatchRunner {
             let show_circular = cli.circular || (!cli.circular && !cli.tree);
             if show_circular {
                 let console_output = ConsoleOutput::new();
-                console_output.print_circular(&result.circulars, cli.take, Some(3));
+                // Pre-scan is a full-scan; no changed-file context available.
+                console_output.print_circular(&result.circulars, cli.take, Some(3), None::<String>);
             }
 
             if cli.tree {
@@ -131,9 +132,10 @@ impl WatchRunner {
             println!("{}", style("✅ Initial scan complete.").green());
         }
 
-        const DEBOUNCE_DURATION: std::time::Duration = std::time::Duration::from_millis(300);
+        let debounce_ms = cli.debounce.unwrap_or(300u64);
+        let debounce_duration: std::time::Duration = std::time::Duration::from_millis(debounce_ms);
 
-        let mut first_incremental_run = true;
+        let mut first_incremental_run = false;
 
         loop {
             tokio::select! {
@@ -156,9 +158,9 @@ impl WatchRunner {
                     }
                 }
 
-                _ = tokio::time::sleep(DEBOUNCE_DURATION) => {
+                _ = tokio::time::sleep(debounce_duration) => {
                     logger::debug("Debounce tick");
-                    if !changed_files.is_empty() && last_change.elapsed() >= DEBOUNCE_DURATION {
+                    if !changed_files.is_empty() && last_change.elapsed() >= debounce_duration {
                         let files_to_analyze: Vec<String> = changed_files.drain().collect();
                         logged_files.clear();
 
@@ -279,7 +281,19 @@ impl WatchRunner {
 
         if show_circular {
             let console_output = ConsoleOutput::new();
-            console_output.print_circular(&result.circulars, cli.take, Some(3));
+            // Provide context: the list of changed files that triggered this incremental run
+            // Build owned context string for printing so it lives through the call
+            if !changed_files.is_empty() {
+                let context_str = changed_files.join(", ");
+                console_output.print_circular(
+                    &result.circulars,
+                    cli.take,
+                    Some(3),
+                    Some(context_str),
+                );
+            } else {
+                console_output.print_circular(&result.circulars, cli.take, Some(3), None::<String>);
+            }
         }
 
         if cli.tree {

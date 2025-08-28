@@ -103,6 +103,17 @@ pub struct Cli {
         help = "Concurrency limit for module resolution (overrides automatic default)"
     )]
     pub resolve_concurrency: Option<usize>,
+    #[arg(
+        long,
+        help = "Debounce interval in milliseconds when used with --watch"
+    )]
+    pub debounce: Option<u64>,
+    #[arg(
+        long,
+        default_value_t = 128usize,
+        help = "Maximum directory recursion depth when expanding directories and globs"
+    )]
+    pub max_depth: usize,
 }
 
 impl Cli {
@@ -158,6 +169,12 @@ impl Cli {
         if let Some(take) = self.take {
             if take == 0 {
                 return Err("Take value must be greater than 0".to_string());
+            }
+        }
+
+        if let Some(d) = self.debounce {
+            if d == 0 {
+                return Err("Debounce value must be greater than 0".to_string());
             }
         }
 

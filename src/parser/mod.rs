@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 pub trait Parser: Send + Sync {
     fn parse_file(&self, file_path: &str, content: &str) -> Result<Vec<crate::types::Dependency>>;
     /// Return the list of file extensions (without dot) this parser handles, e.g. ["js", "mjs"].
-    fn handled_extensions(&self) -> Vec<String>;
+    fn handled_extensions(&self) -> &'static [&'static str];
 }
 
 /// Delegate existing parsers to the trait so they can be used as dyn Parser.
@@ -22,7 +22,7 @@ impl Parser for JavaScriptParser {
     fn parse_file(&self, file_path: &str, content: &str) -> Result<Vec<crate::types::Dependency>> {
         JavaScriptParser::parse_file(self, file_path, content)
     }
-    fn handled_extensions(&self) -> Vec<String> {
+    fn handled_extensions(&self) -> &'static [&'static str] {
         JavaScriptParser::handled_extensions(self)
     }
 }
@@ -31,7 +31,7 @@ impl Parser for VueParser {
     fn parse_file(&self, file_path: &str, content: &str) -> Result<Vec<crate::types::Dependency>> {
         VueParser::parse_file(self, file_path, content)
     }
-    fn handled_extensions(&self) -> Vec<String> {
+    fn handled_extensions(&self) -> &'static [&'static str] {
         VueParser::handled_extensions(self)
     }
 }
@@ -75,7 +75,7 @@ pub fn register_parser_for_extensions(exts: Vec<&str>, parser: DynParser) {
 /// to the per-extension registration API.
 pub fn register_parser(parser: DynParser) {
     let exts = parser.handled_extensions();
-    let refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+    let refs: Vec<&str> = exts.to_vec();
     register_parser_for_extensions(refs, parser);
 }
 

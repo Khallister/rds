@@ -14,8 +14,8 @@ module.exports = function rdsWatchPlugin(options = {}) {
   let child = null;
   let serverClosed = false;
   let stopPromise = null;
-  const exe = options.execPath || chooseExecutable();
-  const args = ensureArray(options.args || ["--watch"]);
+  let exe = options.execPath || chooseExecutable();
+  let args = ensureArray(options.args || ["--watch"]);
   const cwd = options.cwd || process.cwd();
   const useShell =
     typeof options.useShell === "boolean"
@@ -61,12 +61,40 @@ module.exports = function rdsWatchPlugin(options = {}) {
     try {
       if (!found) return null;
       if (!fs.existsSync(found)) return found;
+      // If the path is a symlink, prefer the real path
+      try {
+        const real = fs.realpathSync(found);
+        if (real && real !== found && fs.existsSync(real)) return real;
+      } catch (e) {
+        // ignore realpath failures
+      }
       const text = fs.readFileSync(found, "utf8");
-      const m = text.match(/exec\s+["']?\$basedir[\\\/]+([^"'\s]+rds\.exe)["']?/i);
-      if (m && m[1]) {
-        const rel = m[1].replace(/\//g, path.sep);
-        const candidate = path.resolve(path.dirname(found), rel);
-        if (fs.existsSync(candidate)) return candidate;
+      // try to detect common shim patterns that point to a bundled binary
+      const patterns = [
+        /exec\s+["']?\$basedir[\\\/]+([^"'\s]*rds(?:\.exe)?)["']?/i,
+        /require\(['"].*bin[\\\/]([^"']*rds(?:\.exe)?)["']\)/i,
+        /path\.join\(.*__dirname.*[,\s]*['"]?\.\.[\\\/]bin[\\\/]([^'"\)]+)['"]?\)/i,
+      ];
+      for (const pat of patterns) {
+        const m = text.match(pat);
+        if (m && m[1]) {
+          const rel = m[1].replace(/\//g, path.sep);
+          const candidate = path.resolve(path.dirname(found), rel);
+          if (fs.existsSync(candidate)) return candidate;
+        }
+      }
+      // fallback: look for common nearby bin/ candidates
+      const tryDirs = [
+        path.dirname(found),
+        path.resolve(path.dirname(found), ".."),
+        path.resolve(path.dirname(found), "..", ".."),
+      ];
+      const names = ["rds.exe", "rds"];
+      for (const d of tryDirs) {
+        for (const n of names) {
+          const p = path.join(d, "bin", n);
+          if (fs.existsSync(p)) return p;
+        }
       }
     } catch {}
     return found;
@@ -141,8 +169,19 @@ module.exports = function rdsWatchPlugin(options = {}) {
         (a === "--exclude" || a.startsWith("--exclude="))
     );
     if (!hasExclude)
-      spawnArgs.push("--exclude", "node_modules|.git|.vite|dist|build|.cache");
+      spawnArgs.push(
+        ".",
+        "--exclude",
+        "node_modules|.git|.vite|dist|build|.cache"
+      );
     const spawnArgsForShell = spawnArgs.map(quoteIfNeeded);
+    // If no explicit execPath is provided, just run `npx rds` so the plugin
+    // uses the project-installed CLI (or the global one) consistently.
+    if (!options.execPath) {
+      exe = "npx";
+      spawnArgs.unshift("rds");
+    }
+
     let resolved = resolveCommand(exe);
     const spawnOptions = { cwd, stdio: "inherit", shell: useShell };
     // On Windows prefer to spawn the real rds.exe directly (no shell) when available.
@@ -155,13 +194,13 @@ module.exports = function rdsWatchPlugin(options = {}) {
       }
     }
     const argsToPass = spawnOptions.shell ? spawnArgsForShell : spawnArgs;
-  child = spawn(resolved, argsToPass, spawnOptions);
+    child = spawn(resolved, argsToPass, spawnOptions);
     attachHandlers(child, "rds", { npx: false, npm: false });
   }
 
   function stopChild() {
     if (!child) return Promise.resolve();
-  const pid = child.pid;
+    const pid = child.pid;
     return new Promise((resolve) => {
       try {
         child.kill("SIGTERM");

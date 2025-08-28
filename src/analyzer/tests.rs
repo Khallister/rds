@@ -55,9 +55,11 @@ fn test_simple_cycle_detection() {
 
     assert!(!cycles.is_empty());
     // expect a 2-node cycle containing A and B
-    assert!(cycles
-        .iter()
-        .any(|c| c.len() == 2 && c.contains(&a) && c.contains(&b)));
+    assert!(
+        cycles
+            .iter()
+            .any(|c| c.len() == 2 && c.contains(&a) && c.contains(&b))
+    );
 }
 
 #[test]
@@ -178,7 +180,9 @@ fn test_three_node_cycle_canonicalization() {
 
     let analyzer = CircularAnalyzer::new();
     let cycles = analyzer.find_circular_dependencies(&tree, &SkipDynamicImports::Never, None);
-    assert!(cycles
-        .iter()
-        .any(|cyc| cyc.len() == 3 && cyc.contains(&a) && cyc.contains(&b) && cyc.contains(&c)));
+    assert!(
+        cycles
+            .iter()
+            .any(|cyc| cyc.len() == 3 && cyc.contains(&a) && cyc.contains(&b) && cyc.contains(&c))
+    );
 }
