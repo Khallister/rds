@@ -320,8 +320,28 @@ jobs:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: NPM install cache
-        uses: c-hive/gha-npm-cache@v1
+      - name: Install npm dependencies
+        run: |
+          set -euo pipefail
+          # Use npm ci when a lockfile is present for reproducible installs,
+          # otherwise fall back to npm install. Disable audit and funding
+          # messages to keep logs concise.
+          if [ -f package-lock.json ]; then
+            npm ci --prefer-offline --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Cache node modules and npm cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          # Use lockfile and package.json hashes as part of the key for stability
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Publish package to npm (if present and not private)
         env:
