@@ -30,14 +30,33 @@ function findBinary(binDir) {
     if (fs.existsSync(p)) return p;
   }
 
-  // fallback: any rds* binary in bin/
+  // fallback: any rds* binary in bin/ (skip archive files)
   try {
     const files = fs.readdirSync(binDir);
     for (const f of files) {
-      if (f.startsWith("rds")) {
-        const p = path.join(binDir, f);
-        if (fs.statSync(p).isFile()) return p;
+      if (!f.startsWith("rds")) continue;
+      // skip common archive extensions
+      if (
+        f.endsWith(".zip") ||
+        f.endsWith(".tar.gz") ||
+        f.endsWith(".tar") ||
+        f.endsWith(".7z")
+      )
+        continue;
+      const p = path.join(binDir, f);
+      try {
+        if (!fs.statSync(p).isFile()) continue;
+      } catch {
+        continue;
       }
+      // prefer exact match to rds or platform-specific names
+      if (
+        path.basename(p) === `rds${ext}` ||
+        path.basename(p) === `rds-${platform}-${arch}${ext}` ||
+        path.basename(p) === `rds-${platform}${ext}`
+      )
+        return p;
+      return p;
     }
   } catch {
     // ignore

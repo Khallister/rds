@@ -1,6 +1,6 @@
 [package]
 name = "rds"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2024"
 description = "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects"
 
