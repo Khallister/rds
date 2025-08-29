@@ -1,6 +1,6 @@
 {
   "name": "rds-analyzer",
-  "version": "0.5.4-alpha",
+  "version": "0.5.5-alpha",
   "description": "A memory-efficient dependency analyzer for JavaScript, TypeScript, and Vue projects",
   "main": "index.js",
   "bin": {
@@ -48,7 +48,6 @@
     "arm64"
   ],
   "files": [
-    "bin/",
     "bin/run-rds.js",
     "install.js",
     "index.js",
